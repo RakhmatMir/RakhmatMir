@@ -34,6 +34,16 @@
 
 ---
 
+## 🤖 Telegram-боты / Telegram Bots
+
+| Бот / Bot | Статус / Status | Ссылка / Link |
+|-----------|-----------------|---------------|
+| **LavhFirmbot** | ✅ Активен / **Active** | [@LavhFirmbot](https://t.me/LavhFirmbot) |
+| **BozorUzGlobal** | 🚧 В разработке / **In development** | [@BozorUzGlobal_bot](https://t.me/BozorUzGlobal_bot) |
+| **OquvOlami** | 🚧 В разработке / **In development** | [@OquvOlamiBot](https://t.me/OquvOlamiBot) |
+
+---
+
 ## 🚀 Проекты / Projects
 
 | Проект / Project | Demo | Code |
