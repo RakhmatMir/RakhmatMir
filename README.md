@@ -58,6 +58,8 @@
 ## 📫 Контакты / Contact
 
 - 📱 **Telegram:** [@Rmirzaev](https://t.me/Rmirzaev)
+- 📞 **Phone:** [+998 93 825 09 83](tel:+998938250983)
+- ✉️ **Email:** [rahmatmirzaev@gmail.com](mailto:rahmatmirzaev@gmail.com)
 - 🌐 **Portfolio:** https://rakhmatmir.github.io
 - 💻 **GitHub:** https://github.com/RakhmatMir
 - 📍 **Location:** Fergana, Uzbekistan
