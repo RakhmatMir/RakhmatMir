@@ -3,30 +3,31 @@
 **Frontend & Automation Developer** · Fergana, Uzbekistan  
 **Разработчик frontend и автоматизации** · Фергана, Узбекистан
 
-Открыт к работе, проектам и сотрудничеству · Open to work, projects & collaboration
+🟢 Открыт к работе · **Open to work**
+
+🌐 **Portfolio:** [rakhmatmir.github.io](https://rakhmatmir.github.io)
 
 ---
 
 ## 🛠 Навыки / Skills
 
 ### 💻 Web & Code
-`HTML5` · `CSS3` · `JavaScript` · `Git` · `GitHub Pages` · Websites
+`HTML5` · `CSS3` · `JavaScript` · `Git` · `GitHub Pages` · Responsive Design
 
 ### 🤖 Telegram & Automation
 - Telegram-боты / **Telegram bots**
-- Telegram Mini Apps (TMA), карточки для продаж / **TMA, sales cards**
-- Ведение Telegram-каналов / **Telegram channel management**
-- Автоматизация постов (Telegram, сайты) / **Post automation**
+- Telegram Mini Apps (TMA) / **Mini Apps**
+- Автоматизация постов / **Post automation**
+- Node.js · Python · **Telegram Bot API**
 
 ### 🧠 AI & Content
-- Работа с AI-агентами / **AI agents**
-- AI-видео / **AI video creation**
-- Статьи и контент для соцсетей / **Social media content**
+- AI-агенты / **AI agents**
+- Контент для соцсетей / **Social media content**
 
 ### 📊 Business Systems
-- Системы учёта и расходов / **Accounting & expense tracking**
-- Отчётность и программы для отчётов / **Reporting systems & tools**
-- Автоматизация рабочих процессов / **Workflow automation**
+- Учёт и расходы / **Accounting & expenses**
+- Отчётность / **Reporting tools**
+- Автоматизация процессов / **Workflow automation**
 
 ### 👥 Soft Skills
 - Работа в команде / **Team collaboration**
@@ -63,4 +64,4 @@
 
 ---
 
-⭐️ [RakhmatMir](https://github.com/RakhmatMir)
+⭐️ From [RakhmatMir](https://github.com/RakhmatMir)
