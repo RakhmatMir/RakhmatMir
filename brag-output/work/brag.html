@@ -78,7 +78,7 @@ function problem() {
     <div class="chip" style="background:#1e1e1e;color:#fff;font-size:32px">Нет аналитики по вопросам</div></div>`;
 }
 function student() {
-  return `<div class="bar">Foundation School — демо · класс 6Б</div>
+  return `<div class="bar">Портал · демо · класс 6Б</div>
     <div class="panel"><strong>Все тесты сданы</strong><div class="meta">Математика 75% · Английский 60% · Русский 40%</div></div>
     <div class="row"><span>Общий средний балл</span><strong>58%</strong></div>`;
 }
@@ -92,7 +92,7 @@ function analytics() {
     <div class="panel"><strong>Сложные вопросы</strong><div class="row"><span>Периметр 5×9</span><span style="color:#dc2626">100%</span></div></div>`;
 }
 function cta() {
-  return `<div style="text-align:center;margin-top:120px;font-size:36px;font-weight:800">Foundation School</div>
+  return `<div style="text-align:center;margin-top:120px;font-size:36px;font-weight:800">Образовательный портал</div>
     <div class="btn" style="max-width:520px;margin:20px auto;font-size:24px">Подключим ваши классы</div>`;
 }
 function ease(t) { return t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3); }
@@ -112,7 +112,7 @@ window.seekTo = function(ms) {
   document.getElementById('mon').style.transform = `translateX(-50%) translateY(${lerp(24, 0, enter)}px)`;
   const ctaEl = document.getElementById('cta');
   if (ms > 16000) {
-    ctaEl.textContent = 'average-runner-sweet-cancer.trycloudflare.com';
+    ctaEl.textContent = 'Подключим вашу школу · демо';
     ctaEl.style.opacity = ease((ms - 16000) / 800);
   } else ctaEl.style.opacity = 0;
 };
