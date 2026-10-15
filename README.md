@@ -45,6 +45,15 @@
 
 ---
 
+## 🏫 Школьный портал / School portal (презентации)
+
+| Аудитория | Ссылка |
+|-----------|--------|
+| Учителя и школа | [rakhmatmir.github.io/prezentaciya](https://rakhmatmir.github.io/prezentaciya/) |
+| Родители | [rakhmatmir.github.io/prezentaciya-roditeli](https://rakhmatmir.github.io/prezentaciya-roditeli/) *(публикуется после merge [этого PR](https://github.com/RakhmatMir/prezentaciya-roditeli/compare/main...RakhmatMir:cursor/prezentaciya-roditeli-17fa))* |
+
+---
+
 ## 🚀 Проекты / Projects
 
 | Проект / Project | Demo | Code |
