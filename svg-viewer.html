@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>SVG — просмотр</title>
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #2563eb;
+      --accent-pressed: #1d4ed8;
+      --preview-bg: #fafafa;
+      --danger: #b91c1c;
+      --radius: 12px;
+      --tap: 48px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1419;
+        --surface: #1a2130;
+        --text: #f3f4f6;
+        --muted: #9ca3af;
+        --border: #374151;
+        --accent: #6b9af2;
+        --accent-pressed: #5a88e8;
+        --preview-bg: #121820;
+        --danger: #f87171;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+        max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    }
+
+    .wrap {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .lead {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    textarea {
+      display: block;
+      width: 100%;
+      min-height: 180px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 16px;
+      line-height: 1.4;
+      resize: vertical;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    textarea::placeholder {
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+
+    button {
+      min-height: var(--tap);
+      min-width: var(--tap);
+      padding: 12px 20px;
+      border: none;
+      border-radius: var(--radius);
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      flex: 1 1 140px;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:active {
+      background: var(--accent-pressed);
+    }
+
+    .btn-secondary {
+      flex: 1 1 120px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .preview-section h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+
+    .preview-box {
+      background: var(--preview-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      min-height: 120px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .preview-box svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    .preview-empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 24px 12px;
+      font-size: 0.95rem;
+    }
+
+    .error {
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+      color: var(--danger);
+      font-size: 0.9rem;
+    }
+
+    .error[hidden] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>SVG — просмотр</h1>
+    <p class="lead">Вставьте код SVG и нажмите «Показать».</p>
+
+    <label for="svg-input">Код SVG</label>
+    <textarea
+      id="svg-input"
+      spellcheck="false"
+      autocapitalize="off"
+      autocomplete="off"
+      placeholder="<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; ...>...</svg>"
+    ></textarea>
+
+    <div class="actions">
+      <button type="button" class="btn-primary" id="btn-show">Показать</button>
+      <button type="button" class="btn-secondary" id="btn-clear">Очистить</button>
+    </div>
+
+    <p class="error" id="error" hidden role="alert"></p>
+
+    <section class="preview-section" aria-labelledby="preview-heading">
+      <h2 id="preview-heading">Превью</h2>
+      <div class="preview-box" id="preview">
+        <p class="preview-empty" id="preview-placeholder">Здесь появится изображение</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      var input = document.getElementById("svg-input");
+      var preview = document.getElementById("preview");
+      var placeholder = document.getElementById("preview-placeholder");
+      var errorEl = document.getElementById("error");
+      var btnShow = document.getElementById("btn-show");
+      var btnClear = document.getElementById("btn-clear");
+
+      function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.hidden = !msg;
+      }
+
+      function normalizeSvg(raw) {
+        var text = raw.trim();
+        if (!text) return null;
+        if (text.indexOf("<svg") === -1) {
+          throw new Error("Вставьте фрагмент, начинающийся с тега <svg>.");
+        }
+        if (text.indexOf("xmlns=") === -1) {
+          text = text.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        return text;
+      }
+
+      function render() {
+        showError("");
+        var raw = input.value;
+        var svgText;
+        try {
+          svgText = normalizeSvg(raw);
+        } catch (e) {
+          showError(e.message || String(e));
+          return;
+        }
+        if (!svgText) {
+          showError("Поле пустое.");
+          return;
+        }
+
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(svgText, "image/svg+xml");
+        var parseErr = doc.querySelector("parsererror");
+        if (parseErr) {
+          showError("Ошибка разбора SVG. Проверьте закрывающие теги и кавычки.");
+          return;
+        }
+        var svg = doc.documentElement;
+        if (!svg || svg.localName !== "svg") {
+          showError("Не найден корневой элемент <svg>.");
+          return;
+        }
+
+        preview.textContent = "";
+        var clone = document.importNode(svg, true);
+        preview.appendChild(clone);
+      }
+
+      function clearAll() {
+        input.value = "";
+        showError("");
+        preview.textContent = "";
+        var p = document.createElement("p");
+        p.className = "preview-empty";
+        p.id = "preview-placeholder";
+        p.textContent = "Здесь появится изображение";
+        preview.appendChild(p);
+        input.focus();
+      }
+
+      btnShow.addEventListener("click", render);
+      btnClear.addEventListener("click", clearAll);
+
+      input.addEventListener("keydown", function (ev) {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+          ev.preventDefault();
+          render();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
