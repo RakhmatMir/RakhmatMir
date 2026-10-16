@@ -1,8 +1,7 @@
-# Презентация для родителей (слайдер)
+# Школьный портал — презентация для родителей
 
-Версия для родителей в репозитории `prezentaciya`: слайдер изображений вместо видеоплеера.
+## Ссылка
 
-**Локально:** откройте `index.html` или после публикации:
+**https://rakhmatmir.github.io/prezentaciya-roditeli/**
 
-- в этом репозитории: `https://rakhmatmir.github.io/prezentaciya/roditeli/`
-- отдельный сайт: `https://rakhmatmir.github.io/prezentaciya-roditeli/`
+Публикация: push в `main` → GitHub Actions (workflow в репозитории) или **Settings → Pages → Deploy from branch → `main` → / (root)**.
