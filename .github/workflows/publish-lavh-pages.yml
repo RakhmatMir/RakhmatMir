@@ -20,16 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build site
+      - name: Build static site
         run: |
           mkdir -p _site/css _site/js
           cp deploy/lavh-presentation/index.html _site/
           cp deploy/lavh-presentation/standalone.html _site/
+          cp deploy/lavh-presentation/UPLOAD-TO-PREZENTACIYA.md _site/
+          cp deploy/lavh-presentation/ENABLE.md _site/
           cp deploy/lavh-presentation/css/slide-01.css _site/css/
           cp deploy/lavh-presentation/js/config.js _site/js/
           cp deploy/lavh-presentation/js/slide-01.js _site/js/
           cp deploy/lavh-presentation/.nojekyll _site/
-          cp deploy/lavh-presentation/ENABLE.md _site/
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: _site

@@ -47,11 +47,13 @@
 
 ## 🏫 LAVH TEST — слайд 1 (презентация)
 
+**Как открыть в браузере (работает):** один раз залить файл — [инструкция UPLOAD-TO-PREZENTACIYA.md](https://github.com/RakhmatMir/RakhmatMir/blob/main/deploy/lavh-presentation/UPLOAD-TO-PREZENTACIYA.md) → ссылка **https://rakhmatmir.github.io/prezentaciya/lavh.html**
+
 | | |
 |---|---|
-| **Скачать и открыть** (двойной клик по файлу) | [standalone.html](https://github.com/RakhmatMir/RakhmatMir/raw/main/deploy/lavh-presentation/standalone.html) |
-| **В сети** (нужно [включить Pages](https://github.com/RakhmatMir/RakhmatMir/blob/main/deploy/lavh-presentation/ENABLE.md)) | https://rakhmatmir.github.io/RakhmatMir/ |
-| **Код** | [deploy/lavh-presentation](https://github.com/RakhmatMir/RakhmatMir/tree/main/deploy/lavh-presentation) |
+| **Код слайда** | [deploy/lavh-presentation](https://github.com/RakhmatMir/RakhmatMir/tree/main/deploy/lavh-presentation) |
+| **Один файл (standalone.html)** | [открыть на GitHub](https://github.com/RakhmatMir/RakhmatMir/blob/main/deploy/lavh-presentation/standalone.html) → Download |
+| **Pages RakhmatMir** (опционально) | [ENABLE.md](https://github.com/RakhmatMir/RakhmatMir/blob/main/deploy/lavh-presentation/ENABLE.md) |
 
 ---
 
