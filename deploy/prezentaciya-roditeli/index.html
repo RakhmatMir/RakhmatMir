@@ -9,29 +9,49 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet" />
   <base id="site-base" href="./" />
-  <link rel="stylesheet" href="css/slider.css?v=2" />
+  <link rel="stylesheet" href="css/slider.css?v=3" />
+  <script>
+    (function () {
+      var base = document.getElementById("site-base");
+      var assetBase = "https://cdn.jsdelivr.net/gh/RakhmatMir/RakhmatMir@main/deploy/prezentaciya-roditeli/";
+      if (
+        location.hostname.includes("jsdelivr.net") ||
+        location.hostname.includes("githubusercontent.com") ||
+        location.hostname.includes("htmlpreview.github.io")
+      ) {
+        base.href = assetBase;
+      }
+    })();
+  </script>
 </head>
-<body>
-  <p class="slider-kicker">Для родителей · школьный портал</p>
-
-  <div class="slider-app">
-    <button type="button" class="slider-nav prev" id="btn-prev" aria-label="Предыдущий слайд">‹</button>
-
-    <div class="slider-frame">
+<body class="roditeli-reel">
+  <div class="reel-viewport" aria-live="polite">
+    <div class="reel-layout">
       <div class="reel-caption slider-caption">
         <p class="caption-text" id="slide-caption"></p>
       </div>
-      <div class="slider-media" id="slide-media"></div>
-      <div class="slider-meta">
-        <span id="slide-counter">1 / 8</span>
-        <div class="slider-dots" id="slide-dots"></div>
-        <span>← → на клавиатуре</span>
+      <div class="reel-stage">
+        <div class="monitor-wrap">
+          <div class="monitor">
+            <div class="monitor-screen" id="slide-media"></div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <button type="button" class="slider-nav next" id="btn-next" aria-label="Следующий слайд">›</button>
   </div>
 
-  <script src="js/slider.js?v=1"></script>
+  <div class="player" id="player">
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="player-controls">
+      <button type="button" class="icon-btn" id="btn-prev" title="Назад">‹</button>
+      <button type="button" class="icon-btn" id="btn-next" title="Вперёд">›</button>
+      <span class="time-label" id="time-label">1 / 8</span>
+      <button type="button" class="icon-btn ghost" id="btn-restart" title="Сначала">↺</button>
+    </div>
+  </div>
+
+  <script src="js/slider.js?v=2"></script>
 </body>
 </html>

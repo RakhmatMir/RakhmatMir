@@ -44,10 +44,11 @@
 
   const captionEl = document.getElementById("slide-caption");
   const mediaEl = document.getElementById("slide-media");
-  const counterEl = document.getElementById("slide-counter");
-  const dotsEl = document.getElementById("slide-dots");
+  const timeLabel = document.getElementById("time-label");
+  const progressBar = document.getElementById("progress-bar");
   const btnPrev = document.getElementById("btn-prev");
   const btnNext = document.getElementById("btn-next");
+  const btnRestart = document.getElementById("btn-restart");
 
   let index = 0;
   const images = [];
@@ -60,23 +61,14 @@
     if (i === 0) img.classList.add("active");
     mediaEl.appendChild(img);
     images.push(img);
-
-    const dot = document.createElement("button");
-    dot.type = "button";
-    dot.setAttribute("aria-label", "Слайд " + (i + 1));
-    if (i === 0) dot.classList.add("active");
-    dot.addEventListener("click", () => goTo(i));
-    dotsEl.appendChild(dot);
   });
-
-  const dots = Array.from(dotsEl.querySelectorAll("button"));
 
   function render() {
     const slide = slides[index];
     captionEl.textContent = slide.caption;
-    counterEl.textContent = index + 1 + " / " + slides.length;
+    timeLabel.textContent = index + 1 + " / " + slides.length;
+    progressBar.style.width = ((index + 1) / slides.length) * 100 + "%";
     images.forEach((img, i) => img.classList.toggle("active", i === index));
-    dots.forEach((dot, i) => dot.classList.toggle("active", i === index));
     btnPrev.disabled = index === 0;
     btnNext.disabled = index === slides.length - 1;
   }
@@ -89,6 +81,7 @@
 
   btnPrev.addEventListener("click", () => goTo(index - 1));
   btnNext.addEventListener("click", () => goTo(index + 1));
+  btnRestart.addEventListener("click", () => goTo(0));
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") goTo(index - 1);
