@@ -45,6 +45,12 @@
 
 ---
 
+## 🏫 Школьный портал
+
+Презентация (один репозиторий): **[prezentaciya](https://github.com/RakhmatMir/prezentaciya)** · **[открыть](https://rakhmatmir.github.io/prezentaciya/)**
+
+---
+
 ## 🚀 Проекты / Projects
 
 | Проект / Project | Demo | Code |
