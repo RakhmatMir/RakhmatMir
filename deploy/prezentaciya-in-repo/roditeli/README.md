@@ -1,7 +1,5 @@
-# Школьный портал — презентация для родителей
+# Презентация для родителей — слайдер как в ролике
 
-## Ссылка
+Шесть блоков из brag-ролика (красная плашка + монитор): листание нижними кнопками ‹ ›, без видео.
 
-**https://rakhmatmir.github.io/prezentaciya-roditeli/**
-
-Публикация: push в `main` → GitHub Actions (workflow в репозитории) или **Settings → Pages → Deploy from branch → `main` → / (root)**.
+**Просмотр:** https://rakhmatmir.github.io/prezentaciya-roditeli/
