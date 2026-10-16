@@ -1,0 +1,212 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap");
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body.brag-slider {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Montserrat, "Segoe UI", system-ui, sans-serif;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  bottom: 72px;
+  background: linear-gradient(180deg, #4dd0e1 0%, #26c6da 35%, #ff9999 70%, #ffab91 100%);
+}
+
+.caption {
+  position: absolute;
+  top: clamp(16px, 4vh, 48px);
+  left: clamp(16px, 5vw, 80px);
+  right: clamp(16px, 5vw, 80px);
+  background: #e53935;
+  color: #fff;
+  text-align: center;
+  padding: clamp(14px, 2.5vh, 28px) clamp(18px, 3vw, 36px);
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: clamp(1.05rem, 3.2vw, 2.05rem);
+  line-height: 1.2;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.monitor-wrap {
+  position: absolute;
+  left: 50%;
+  top: clamp(120px, 22vh, 250px);
+  transform: translateX(-50%);
+  width: min(920px, 92vw);
+}
+
+.monitor {
+  background: #0d0d0d;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.screen {
+  background: #e4e9f0;
+  border-radius: 10px;
+  min-height: clamp(280px, 48vh, 520px);
+  overflow: hidden;
+  padding: 16px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #101828;
+  position: relative;
+}
+
+.panel {
+  background: #f6f8fb;
+  border: 1px solid #b8c4d4;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+  font-size: clamp(0.85rem, 1.8vw, 22px);
+}
+
+.bar {
+  font-size: clamp(0.8rem, 1.6vw, 20px);
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+
+.meta {
+  color: #475467;
+  font-size: clamp(0.75rem, 1.4vw, 18px);
+}
+
+.btn {
+  background: #2563eb;
+  color: #fff;
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  margin-top: 10px;
+  font-size: clamp(0.85rem, 1.6vw, 20px);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #dce3ed;
+  font-size: clamp(0.8rem, 1.5vw, 20px);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.metrics div {
+  background: #f6f8fb;
+  border: 1px solid #b8c4d4;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+.metrics strong {
+  display: block;
+  font-size: clamp(1rem, 2vw, 28px);
+}
+
+.chip {
+  background: rgba(255, 255, 255, 0.92);
+  padding: clamp(12px, 2vh, 20px) clamp(16px, 2.5vw, 28px);
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: clamp(0.95rem, 2vw, 28px);
+}
+
+.cta {
+  position: absolute;
+  bottom: clamp(12px, 3vh, 70px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(1rem, 2.2vw, 34px);
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  padding: 0 16px;
+}
+
+.cta.hidden {
+  display: none;
+}
+
+.brag-slider .player {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.88);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.brag-slider .progress-wrap {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.brag-slider .progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #e53935;
+  transition: width 0.35s ease;
+}
+
+.brag-slider .player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.brag-slider .icon-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.brag-slider .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.brag-slider .icon-btn.ghost {
+  margin-left: auto;
+}
+
+.brag-slider .time-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+}
+
+@media (max-width: 640px) {
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
