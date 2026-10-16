@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">LAVH TEST 2026  A;094 1</title>
+  <desc id="desc">"8BC;L=K9 A;094 ?@575=B0F88 LAVH TEST 2 AB8;5 40H1>@40</desc>
+
+  <defs>
+    <linearGradient id="bgLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7F9FC"/>
+      <stop offset="100%" stop-color="#EEF2F8"/>
+    </linearGradient>
+    <radialGradient id="blueOrb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5B7FEF"/>
+      <stop offset="100%" stop-color="#3D5FD9"/>
+    </radialGradient>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1A2B4A" flood-opacity="0.12"/>
+    </filter>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1A2B4A" flood-opacity="0.08"/>
+    </filter>
+    <style type="text/css"><![CDATA[
+      .font { font-family: "Montserrat", "Segoe UI", Arial, sans-serif; }
+      .logo-main { font-size: 28px; font-weight: 800; fill: #1A1D25; letter-spacing: 0.02em; }
+      .logo-sub { font-size: 11px; font-weight: 600; fill: #6B7280; letter-spacing: 0.12em; }
+      .h1 { font-size: 72px; font-weight: 800; fill: #111827; }
+      .h2 { font-size: 56px; font-weight: 700; fill: #111827; }
+      .tag { font-size: 22px; font-weight: 500; fill: #6B7280; font-style: italic; }
+      .btn { font-size: 18px; font-weight: 700; fill: #FFFFFF; }
+      .card-title { font-size: 13px; font-weight: 600; fill: #9CA3AF; }
+      .card-value { font-size: 26px; font-weight: 800; fill: #4D71DB; }
+      .card-meta { font-size: 11px; font-weight: 500; fill: #9CA3AF; }
+      .card-value-sm { font-size: 14px; font-weight: 700; fill: #374151; }
+      .gauge-text { font-size: 22px; font-weight: 800; fill: #8A3FFC; }
+      .school-name { font-size: 16px; font-weight: 600; fill: #4D71DB; }
+    ]]></style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bgLeft)"/>
+
+  <!-- Right blue orb -->
+  <ellipse cx="1480" cy="540" rx="520" ry="480" fill="url(#blueOrb)" opacity="0.95"/>
+
+  <!-- Decorative rings bottom-right -->
+  <circle cx="1820" cy="980" r="48" fill="none" stroke="#E53935" stroke-width="3" opacity="0.35"/>
+  <circle cx="1820" cy="980" r="72" fill="none" stroke="#E53935" stroke-width="2" opacity="0.2"/>
+
+  <!-- LEFT: Logo -->
+  <g transform="translate(120, 80)">
+    <g transform="translate(0, 4)">
+      <path d="M8 36 L28 8 L48 36 Z" fill="#4D71DB"/>
+      <rect x="14" y="22" width="28" height="6" rx="1" fill="#FFB822"/>
+      <path d="M8 36 L48 36 L40 48 L16 48 Z" fill="#8A3FFC" opacity="0.85"/>
+    </g>
+    <text x="64" y="28" class="font logo-main">LAVH</text>
+    <text x="64" y="44" class="font logo-sub">EDUCATIONAL TECHNOLOGY</text>
+  </g>
+
+  <!-- LEFT: Titles -->
+  <text x="120" y="280" class="font h1">LAVH TEST</text>
+  <text x="120" y="360" class="font h2">2026</text>
+  <text x="120" y="450" class="font h2"> "&/</text>
+
+  <line x1="120" y1="490" x2="520" y2="490" stroke="#D1D5DB" stroke-width="2"/>
+  <text x="120" y="540" class="font tag">Educational technology | Traditional values</text>
+
+  <!-- School name from portal API (static export; update via build or script) -->
+  <text id="school-name" x="120" y="580" class="font school-name">Foundation School  45<></text>
+
+  <!-- Presented By button -->
+  <g transform="translate(120, 620)">
+    <rect width="340" height="56" rx="28" fill="#4D71DB" filter="url(#softShadow)"/>
+    <text x="170" y="36" text-anchor="middle" class="font btn">Presented By : LAVH Group</text>
+  </g>
+
+  <!-- RIGHT: Widget cards -->
+  <!-- Card 1: Annual Revenue -->
+  <g transform="translate(980, 120)" filter="url(#cardShadow)">
+    <rect width="220" height="160" rx="16" fill="#FFFFFF"/>
+    <text x="20" y="36" class="font card-title">Annual Revenue</text>
+    <text x="20" y="72" class="font card-value">$12M</text>
+    <rect x="20" y="90" width="28" height="56" rx="4" fill="#FFB822"/>
+    <rect x="54" y="102" width="28" height="44" rx="4" fill="#7DD3FC"/>
+    <rect x="88" y="78" width="28" height="68" rx="4" fill="#8A3FFC"/>
+    <rect x="122" y="110" width="28" height="36" rx="4" fill="#FF5271"/>
+  </g>
+
+  <!-- Card 2: Equity -->
+  <g transform="translate(1240, 80)" filter="url(#cardShadow)">
+    <rect width="200" height="120" rx="16" fill="#FFB822"/>
+    <text x="20" y="36" class="font card-title" fill="#FFFFFF" opacity="0.9">Equity</text>
+    <text x="20" y="68" class="font card-value" fill="#FFFFFF">55%</text>
+    <text x="20" y="88" class="font card-meta" fill="#FFFFFF" opacity="0.85">from last month</text>
+    <circle cx="160" cy="60" r="28" fill="#FFFFFF" opacity="0.25"/>
+    <circle cx="160" cy="60" r="14" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+  </g>
+
+  <!-- Card 3: Current YTD -->
+  <g transform="translate(1280, 220)" filter="url(#cardShadow)">
+    <rect width="240" height="150" rx="16" fill="#FFFFFF"/>
+    <text x="20" y="36" class="font card-title">Current YTD (Q3)</text>
+    <path d="M 60 110 A 50 50 0 1 1 160 110" fill="none" stroke="#EDE9FE" stroke-width="14" stroke-linecap="round"/>
+    <path d="M 60 110 A 50 50 0 0 1 145 75" fill="none" stroke="#8A3FFC" stroke-width="14" stroke-linecap="round"/>
+    <text x="110" y="105" text-anchor="middle" class="font gauge-text">72%</text>
+    <rect x="20" y="118" width="72" height="24" rx="12" fill="#4D71DB"/>
+    <text x="56" y="134" text-anchor="middle" class="font card-meta" fill="#FFFFFF">YTD</text>
+  </g>
+
+  <!-- Card 4: Today's Expenses -->
+  <g transform="translate(960, 300)" filter="url(#cardShadow)">
+    <rect width="260" height="150" rx="16" fill="#FFFFFF"/>
+    <text x="20" y="36" class="font card-title">Today's Expenses</text>
+    <text x="20" y="72" class="font card-value">$250K</text>
+    <rect x="20" y="88" width="220" height="22" rx="6" fill="#F3F4F6"/>
+    <rect x="28" y="94" width="120" height="10" rx="4" fill="#4D71DB"/>
+    <text x="180" y="106" class="font card-value-sm">$150K</text>
+    <rect x="20" y="118" width="220" height="22" rx="6" fill="#F3F4F6"/>
+    <rect x="28" y="124" width="80" height="10" rx="4" fill="#FF5271"/>
+    <text x="180" y="136" class="font card-value-sm">$100K</text>
+  </g>
+
+  <!-- Card 5: Total Income -->
+  <g transform="translate(1180, 390)" filter="url(#cardShadow)">
+    <rect width="280" height="170" rx="16" fill="#FFFFFF"/>
+    <text x="20" y="36" class="font card-title">Total Income</text>
+    <text x="20" y="72" class="font card-value">$345M</text>
+    <circle cx="90" cy="125" r="42" fill="none" stroke="#EDE9FE" stroke-width="18"/>
+    <circle cx="90" cy="125" r="42" fill="none" stroke="#FF5271" stroke-width="18" stroke-dasharray="66 198" transform="rotate(-90 90 125)"/>
+    <circle cx="90" cy="125" r="42" fill="none" stroke="#FFB822" stroke-width="18" stroke-dasharray="44 220" stroke-dashoffset="-66" transform="rotate(-90 90 125)"/>
+    <circle cx="90" cy="125" r="42" fill="none" stroke="#8A3FFC" stroke-width="18" stroke-dasharray="55 209" stroke-dashoffset="-110" transform="rotate(-90 90 125)"/>
+    <text x="170" y="110" class="font card-value-sm">55%</text>
+    <text x="170" y="132" class="font card-value-sm">55%</text>
+    <text x="170" y="154" class="font card-value-sm">55%</text>
+  </g>
+
+  <!-- Card 6: Loan Approval (partial) -->
+  <g transform="translate(920, 470)" filter="url(#cardShadow)">
+    <rect width="240" height="130" rx="16" fill="#4D71DB"/>
+    <text x="20" y="36" class="font card-title" fill="#FFFFFF" opacity="0.85">Loan Approval Rate</text>
+    <text x="20" y="72" class="font card-value" fill="#FFFFFF">&gt;65%</text>
+    <rect x="20" y="88" width="200" height="12" rx="6" fill="#FFFFFF" opacity="0.3"/>
+    <rect x="20" y="88" width="140" height="12" rx="6" fill="#FFB822"/>
+  </g>
+</svg>
