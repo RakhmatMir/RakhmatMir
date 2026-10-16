@@ -1,0 +1,27 @@
+name: Publish LAVH presentation (gh-pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/lavh-presentation/**"
+      - ".github/workflows/publish-lavh-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lavh-gh-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: deploy/lavh-presentation
+          branch: gh-pages
+          clean: true
