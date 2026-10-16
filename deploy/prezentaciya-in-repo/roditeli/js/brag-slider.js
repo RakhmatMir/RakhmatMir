@@ -90,7 +90,7 @@
       ctaEl.textContent = "";
       ctaEl.classList.add("hidden");
     }
-    timeLabel.textContent = index + 1 + " / " + scenes.length;
+    timeLabel.textContent = "Слайд " + (index + 1) + " / " + scenes.length;
     progressBar.style.width = ((index + 1) / scenes.length) * 100 + "%";
     btnPrev.disabled = index === 0;
     btnNext.disabled = index === scenes.length - 1;

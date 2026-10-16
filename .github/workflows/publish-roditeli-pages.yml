@@ -1,4 +1,4 @@
-name: Publish roditeli preview (GitHub Pages)
+name: Publish roditeli slider (gh-pages)
 
 on:
   push:
@@ -9,27 +9,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: roditeli-pages
+  group: roditeli-gh-pages
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      - uses: JamesIves/github-pages-deploy-action@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: deploy/prezentaciya-roditeli
-      - uses: actions/deploy-pages@v4
-        id: deployment
+          folder: deploy/prezentaciya-roditeli
+          branch: gh-pages
+          clean: true
