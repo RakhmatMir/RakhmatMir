@@ -13,9 +13,13 @@ python3 -m http.server 8080
 
 ## GitHub Pages
 
-После push в `main` workflow публикует эту папку на ветку `gh-pages`.
+Workflow публикует сайт на ветку **`gh-pages`**.  
+**Один раз** включите Pages — см. **[ENABLE.md](./ENABLE.md)**.
 
-URL: **https://rakhmatmir.github.io/RakhmatMir/** (если в настройках репозитория Pages → Source: Deploy from branch `gh-pages` / root).
+Рабочие URL после включения:
+
+- https://rakhmatmir.github.io/RakhmatMir/
+- https://rakhmatmir.github.io/RakhmatMir/standalone.html
 
 ## Данные с портала
 

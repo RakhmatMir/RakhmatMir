@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="LAVH TEST 2026 — титульный слайд презентации" />
+  <title>LAVH TEST 2026 — слайд 1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+:root {
+  --lavh-blue: #4d71db;
+  --lavh-blue-dark: #3d5fd9;
+  --lavh-blue-light: #5b7fef;
+  --lavh-yellow: #ffb822;
+  --lavh-pink: #ff5271;
+  --lavh-purple: #8a3ffc;
+  --text-dark: #111827;
+  --text-muted: #6b7280;
+  --card-shadow: 0 8px 24px rgba(26, 43, 74, 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: Montserrat, "Segoe UI", system-ui, sans-serif;
+  background: #dfe5ef;
+  color: var(--text-dark);
+}
+
+.viewport {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  gap: 10px;
+}
+
+.slide {
+  position: relative;
+  width: min(1280px, 100%);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #f7f9fc 0%, #eef2f8 100%);
+}
+
+.slide-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.slide-left {
+  position: relative;
+  z-index: 2;
+  width: 46%;
+  height: 100%;
+  padding: clamp(20px, 4vw, 48px) clamp(20px, 3vw, 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: clamp(24px, 5vh, 56px);
+}
+
+.brand-icon {
+  position: relative;
+  width: 48px;
+  height: 44px;
+}
+
+.brand-cap {
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-bottom: 28px solid var(--lavh-blue);
+}
+
+.brand-book {
+  position: absolute;
+  left: 8px;
+  bottom: 0;
+  width: 40px;
+  height: 12px;
+  background: linear-gradient(var(--lavh-purple) 50%, transparent 50%);
+  border-radius: 0 0 4px 4px;
+  opacity: 0.85;
+}
+
+.brand-book::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 6px;
+  width: 28px;
+  height: 6px;
+  background: var(--lavh-yellow);
+  border-radius: 1px;
+}
+
+.brand-text strong {
+  display: block;
+  font-size: clamp(1.1rem, 2vw, 1.75rem);
+  letter-spacing: 0.02em;
+}
+
+.brand-text span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.title-main {
+  margin: 0;
+  font-size: clamp(2rem, 5.5vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.title-year,
+.title-sub {
+  margin: 0.15em 0 0;
+  font-size: clamp(1.6rem, 4vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.title-rule {
+  width: min(280px, 70%);
+  margin: 1rem 0 0.75rem;
+  border: none;
+  border-top: 2px solid #d1d5db;
+}
+
+.tagline {
+  margin: 0;
+  font-size: clamp(0.85rem, 1.6vw, 1.35rem);
+  font-style: italic;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.school-name {
+  margin: 0.65rem 0 0;
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  font-weight: 600;
+  color: var(--lavh-blue);
+}
+
+.presented-by {
+  margin-top: auto;
+  align-self: flex-start;
+  padding: 14px 28px;
+  border-radius: 999px;
+  background: var(--lavh-blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(0.75rem, 1.2vw, 1.1rem);
+  box-shadow: 0 4px 12px rgba(77, 113, 219, 0.35);
+}
+
+.slide-right {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.orb {
+  position: absolute;
+  right: -8%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 58%;
+  height: 88%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, var(--lavh-blue-light), var(--lavh-blue-dark));
+  opacity: 0.95;
+}
+
+.rings {
+  position: absolute;
+  right: 2%;
+  bottom: 4%;
+  width: 72px;
+  height: 72px;
+  border: 3px solid rgba(229, 57, 53, 0.35);
+  border-radius: 50%;
+  box-shadow: 0 0 0 24px rgba(229, 57, 53, 0.2);
+}
+
+.widgets {
+  position: absolute;
+  right: 4%;
+  top: 8%;
+  width: 52%;
+  height: 84%;
+}
+
+.card {
+  position: absolute;
+  border-radius: 16px;
+  padding: 14px 16px;
+  pointer-events: auto;
+}
+
+.shadow {
+  box-shadow: var(--card-shadow);
+}
+
+.card h3 {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.card .value {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--lavh-blue);
+}
+
+.card .meta {
+  margin: 4px 0 0;
+  font-size: 0.65rem;
+  color: #9ca3af;
+}
+
+.card-revenue {
+  left: 8%;
+  top: 0;
+  width: 28%;
+  background: #fff;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+  height: 68px;
+}
+
+.bars span {
+  width: 22%;
+  border-radius: 4px;
+}
+
+.card-equity {
+  right: 8%;
+  top: -2%;
+  width: 26%;
+  background: var(--lavh-yellow);
+}
+
+.card-equity h3,
+.card-equity .value,
+.card-equity .meta {
+  color: #fff;
+}
+
+.card-equity .meta {
+  opacity: 0.85;
+}
+
+.equity-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.card-ytd {
+  right: 4%;
+  top: 22%;
+  width: 32%;
+  background: #fff;
+}
+
+.gauge-wrap {
+  position: relative;
+  width: 120px;
+  margin: 8px auto 4px;
+}
+
+.gauge {
+  width: 100px;
+  height: 50px;
+  margin: 0 auto;
+  border-radius: 100px 100px 0 0;
+  background: conic-gradient(from 180deg, var(--lavh-purple) calc(var(--pct) * 1.8deg), #ede9fe 0);
+  mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
+  -webkit-mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
+}
+
+.gauge-label {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-weight: 800;
+  color: var(--lavh-purple);
+  font-size: 1.1rem;
+}
+
+.pill {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--lavh-blue);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.card-expenses {
+  left: 2%;
+  top: 38%;
+  width: 34%;
+  background: #fff;
+}
+
+.exp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.exp-track {
+  flex: 1;
+  height: 10px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.exp-track span {
+  display: block;
+  height: 100%;
+  background: var(--lavh-blue);
+  border-radius: 4px;
+}
+
+.exp-row-pink .exp-track span {
+  background: var(--lavh-pink);
+}
+
+.card-income {
+  right: 6%;
+  top: 52%;
+  width: 36%;
+  background: #fff;
+}
+
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.donut {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--lavh-pink) 0 33%,
+    var(--lavh-yellow) 33% 55%,
+    var(--lavh-purple) 55% 100%
+  );
+  mask: radial-gradient(circle, transparent 52%, #000 53%);
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 53%);
+}
+
+.donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.card-loan {
+  left: 0;
+  bottom: 2%;
+  width: 32%;
+  background: var(--lavh-blue);
+}
+
+.card-loan h3,
+.card-loan .value {
+  color: #fff;
+}
+
+.card-loan h3 {
+  opacity: 0.85;
+}
+
+.loan-track {
+  margin-top: 10px;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.loan-track span {
+  display: block;
+  height: 100%;
+  background: var(--lavh-yellow);
+  border-radius: 6px;
+}
+
+.page-foot {
+  width: min(1280px, 100%);
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #4b5563;
+  padding: 0 4px;
+}
+
+.data-status.ok {
+  color: #059669;
+}
+
+.data-status.warn {
+  color: #b45309;
+}
+
+@media (max-width: 900px) {
+  .slide {
+    aspect-ratio: auto;
+    min-height: 680px;
+  }
+
+  .slide-left {
+    width: 100%;
+    height: auto;
+    min-height: 42%;
+  }
+
+  .widgets {
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 100%;
+    height: 360px;
+    margin-top: -40px;
+  }
+
+  .orb {
+    width: 90%;
+    right: -30%;
+    opacity: 0.5;
+  }
+
+  .card {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+}
+
+</style>
+</head>
+<body>
+  <div class="viewport">
+    <article class="slide" id="slide-1" aria-label="Титульный слайд">
+      <div class="slide-bg"></div>
+
+      <div class="slide-left">
+        <header class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <span class="brand-cap"></span>
+            <span class="brand-book"></span>
+          </div>
+          <div class="brand-text">
+            <strong>LAVH</strong>
+            <span>EDUCATIONAL TECHNOLOGY</span>
+          </div>
+        </header>
+
+        <h1 class="title-main">LAVH TEST</h1>
+        <p class="title-year">2026</p>
+        <p class="title-sub">ПРЕЗЕНТАЦИЯ</p>
+        <hr class="title-rule" />
+        <p class="tagline">Educational technology | Traditional values</p>
+        <p class="school-name" id="school-name">Загрузка школы…</p>
+        <p class="presented-by">Presented By : LAVH Group</p>
+      </div>
+
+      <div class="slide-right">
+        <div class="orb" aria-hidden="true"></div>
+        <div class="rings" aria-hidden="true"></div>
+
+        <div class="widgets">
+          <section class="card card-revenue shadow">
+            <h3>Annual Revenue</h3>
+            <p class="value">$12M</p>
+            <div class="bars" aria-hidden="true">
+              <span style="height:56px;background:#FFB822"></span>
+              <span style="height:44px;background:#7DD3FC"></span>
+              <span style="height:68px;background:#8A3FFC"></span>
+              <span style="height:36px;background:#FF5271"></span>
+            </div>
+          </section>
+
+          <section class="card card-equity shadow">
+            <h3>Equity</h3>
+            <p class="value">55%</p>
+            <p class="meta">from last month</p>
+            <div class="equity-icon" aria-hidden="true"></div>
+          </section>
+
+          <section class="card card-ytd shadow">
+            <h3>Current YTD (Q3)</h3>
+            <div class="gauge-wrap">
+              <div class="gauge" style="--pct:72" aria-hidden="true"></div>
+              <span class="gauge-label">72%</span>
+            </div>
+            <span class="pill">YTD</span>
+          </section>
+
+          <section class="card card-expenses shadow">
+            <h3>Today's Expenses</h3>
+            <p class="value">$250K</p>
+            <div class="exp-row">
+              <div class="exp-track"><span style="width:55%"></span></div>
+              <span>$150K</span>
+            </div>
+            <div class="exp-row exp-row-pink">
+              <div class="exp-track"><span style="width:36%"></span></div>
+              <span>$100K</span>
+            </div>
+          </section>
+
+          <section class="card card-income shadow">
+            <h3>Total Income</h3>
+            <p class="value">$345M</p>
+            <div class="donut-wrap">
+              <div class="donut" aria-hidden="true"></div>
+              <ul class="donut-legend">
+                <li>55%</li>
+                <li>55%</li>
+                <li>55%</li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="card card-loan shadow">
+            <h3>Loan Approval Rate</h3>
+            <p class="value">&gt;65%</p>
+            <div class="loan-track"><span style="width:70%"></span></div>
+          </section>
+        </div>
+      </div>
+    </article>
+
+    <footer class="page-foot">
+      <span id="data-status" class="data-status">Данные: …</span>
+      <span class="slide-num">Слайд 1 / 10</span>
+    </footer>
+  </div>
+
+  <script>
+/** URL портала для /api/public/landing (можно заменить на свой домен). */
+window.LAVH_PORTAL_API = "https://average-runner-sweet-cancer.trycloudflare.com";
+
+(function () {
+  var schoolEl = document.getElementById("school-name");
+  var statusEl = document.getElementById("data-status");
+  var base = window.LAVH_PORTAL_API || "";
+  var fallbackName = "Foundation School — демо";
+
+  function setStatus(text, kind) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.remove("ok", "warn");
+    if (kind) statusEl.classList.add(kind);
+  }
+
+  function applySchoolName(name) {
+    if (schoolEl && name) schoolEl.textContent = name;
+  }
+
+  applySchoolName(fallbackName);
+  setStatus("Данные: локальная заготовка", "warn");
+
+  if (!base) {
+    setStatus("Данные: задайте LAVH_PORTAL_API в config.js", "warn");
+    return;
+  }
+
+  var url = base.replace(/\/$/, "") + "/api/public/landing";
+
+  fetch(url, { credentials: "omit" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.school_name) {
+        applySchoolName(data.school_name);
+        setStatus("Данные: с портала (" + new URL(url).hostname + ")", "ok");
+      } else {
+        setStatus("Данные: API без school_name, заготовка", "warn");
+      }
+    })
+    .catch(function () {
+      applySchoolName(fallbackName);
+      setStatus("Данные: портал недоступен (CORS или туннель), заготовка", "warn");
+    });
+})();
+
+</script>
+</body>
+</html>

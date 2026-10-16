@@ -45,6 +45,16 @@
 
 ---
 
+## 🏫 LAVH TEST — слайд 1 (презентация)
+
+| | |
+|---|---|
+| **Скачать и открыть** (двойной клик по файлу) | [standalone.html](https://github.com/RakhmatMir/RakhmatMir/raw/main/deploy/lavh-presentation/standalone.html) |
+| **В сети** (нужно [включить Pages](https://github.com/RakhmatMir/RakhmatMir/blob/main/deploy/lavh-presentation/ENABLE.md)) | https://rakhmatmir.github.io/RakhmatMir/ |
+| **Код** | [deploy/lavh-presentation](https://github.com/RakhmatMir/RakhmatMir/tree/main/deploy/lavh-presentation) |
+
+---
+
 ## 🚀 Проекты / Projects
 
 | Проект / Project | Demo | Code |
