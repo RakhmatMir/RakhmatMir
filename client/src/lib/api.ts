@@ -4,7 +4,13 @@ export function setCsrf(token: string | null) {
   csrfToken = token;
 }
 
+const usePagesDemo = import.meta.env.VITE_PAGES_DEMO === "true";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (usePagesDemo) {
+    const { pagesDemoFetch } = await import("./pages-demo");
+    return pagesDemoFetch<T>(path, init);
+  }
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
   if (csrfToken && init?.method && init.method !== "GET") {

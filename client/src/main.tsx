@@ -6,7 +6,7 @@ import "./styles/global.css";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
       <App />
     </BrowserRouter>
   </React.StrictMode>,
