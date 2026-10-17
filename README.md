@@ -37,7 +37,17 @@ E2E (Playwright) и полный набор интеграционных тес�
 
 См. [`docs/design-references.md`](docs/design-references.md).
 
-## Постоянная ссылка на сайт (не GitHub)
+## Постоянная ссылка (как портфолио на GitHub Pages)
+
+После push в ветку **`school-test-v2`** GitHub Actions публикует сайт:
+
+**https://rakhmatmir.github.io/RakhmatMir/**
+
+(В Settings → Pages репозитория `RakhmatMir` источник: **GitHub Actions**.)
+
+Демо-режим Pages: данные и логика в браузере (localStorage), вход `admin` / `admin123`.
+
+## Постоянная ссылка на полный сервер (Render)
 
 Код в GitHub **не открывает** приложение. Нужен хостинг:
 
