@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: foundation-school-6b
+    runtime: docker
+    plan: free
+    branch: school-test-v2
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: ./data/app.db

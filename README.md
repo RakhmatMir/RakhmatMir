@@ -36,3 +36,13 @@ E2E (Playwright) и полный набор интеграционных тес�
 ## Дизайн
 
 См. [`docs/design-references.md`](docs/design-references.md).
+
+## Постоянная ссылка на сайт (не GitHub)
+
+Код в GitHub **не открывает** приложение. Нужен хостинг:
+
+1. Откройте **[Deploy on Render](https://render.com/deploy?repo=https://github.com/RakhmatMir/RakhmatMir)** (в Render выберите ветку **`school-test-v2`**).
+2. Войдите через GitHub → **Apply** / **Create Web Service**.
+3. Постоянный адрес: **`https://foundation-school-6b.onrender.com`**
+
+Первый заход после простоя может занять до ~1 минуты (бесплатный тариф Render).
