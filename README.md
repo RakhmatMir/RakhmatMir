@@ -41,9 +41,9 @@ E2E (Playwright) и полный набор интеграционных тес�
 
 После push в ветку **`school-test-v2`** GitHub Actions публикует сайт:
 
-**https://rakhmatmir.github.io/RakhmatMir/**
+**https://rakhmatmir.github.io/RakhmatMir/school/**
 
-(В Settings → Pages репозитория `RakhmatMir` источник: **GitHub Actions**.)
+Один раз на телефоне: GitHub → репозиторий **RakhmatMir** → **Settings** → **Pages** → Source: ветка **`gh-pages`**, папка **`/ (root)`** → **Save**. (Как у `prezentaciya`, только ветка `gh-pages`.)
 
 Демо-режим Pages: данные и логика в браузере (localStorage), вход `admin` / `admin123`.
 
