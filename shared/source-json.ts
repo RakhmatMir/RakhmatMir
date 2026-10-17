@@ -1,82 +1,79 @@
 import { z } from "zod";
 
-/** Zod schema for the Foundation School export JSON (fields used by seed). */
-export const sourceJsonSchema = z
-  .object({
-    school: z
-      .object({
-        name: z.string(),
-        github_upload_enabled: z.boolean().optional(),
-        github_token: z.string().optional(),
-        telemetry_retention_hours: z.number().optional(),
-        submissions_reset_generation: z.number().optional(),
-      })
-      .passthrough(),
-    class: z
-      .object({
-        id: z.union([z.string(), z.number()]),
-        name: z.string(),
-        bundle_time_limit_minutes: z.number().optional(),
-        bundle_published: z.boolean().optional(),
-        exam_date: z.string().optional(),
-        phase: z.string().optional(),
-        catalog_key: z.string().optional(),
-      })
-      .passthrough(),
-    subjects: z
-      .array(
-        z.object({
-          id: z.union([z.string(), z.number()]),
-          name: z.string(),
-        }).passthrough(),
-      )
-      .optional(),
-    students: z.array(
-      z
-        .object({
-          id: z.number(),
-          name: z.string(),
-          login: z.string(),
-          password: z.string(),
-          class_id: z.union([z.string(), z.number()]).optional(),
-          status: z.string().optional(),
-          results: z.record(z.string(), z.unknown()).optional(),
-        })
-        .passthrough(),
+const questionSchema = z.object({
+  text: z.string(),
+  options: z.array(z.string()),
+  correct_index: z.number(),
+});
+
+export const sourceJsonSchema = z.object({
+  school_name: z.string(),
+  classes: z.array(
+    z.object({
+      class_name: z.string(),
+      student_count: z.number(),
+      test_count: z.number(),
+    }),
+  ),
+  class_schedules: z.record(
+    z.string(),
+    z.object({
+      total_minutes: z.number(),
+      bundle_published: z.boolean(),
+    }),
+  ),
+  submissions_reset_generation: z.number(),
+  submissions_retention_hours: z.number(),
+  submissions_upload: z.object({
+    enabled: z.boolean(),
+    github_token: z.string(),
+  }),
+  subjects: z.array(
+    z.object({
+      code: z.string(),
+      title: z.string(),
+      test_count: z.number(),
+    }),
+  ),
+  exams: z.array(
+    z.object({
+      id: z.number(),
+      class_name: z.string(),
+      subject_code: z.string(),
+      subject_title: z.string(),
+      title: z.string(),
+      control_date: z.string(),
+      duration_minutes: z.number(),
+      published_to_students: z.boolean(),
+      question_count: z.number(),
+      questions: z.array(questionSchema),
+      phase: z.string().optional(),
+      catalog_key: z.string().optional(),
+      requires_teacher_publish: z.boolean().optional(),
+    }),
+  ),
+  rosters: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        id: z.number(),
+        full_name: z.string(),
+        status: z.string(),
+        score_percent: z.number().nullable(),
+      }),
     ),
-    exams: z.array(
-      z
-        .object({
-          id: z.number(),
-          subject_id: z.union([z.string(), z.number()]).optional(),
-          subject: z.string().optional(),
-          title: z.string(),
-          date: z.string().optional(),
-          duration_minutes: z.number(),
-          published_to_students: z.boolean().optional(),
-          questions: z.array(
-            z
-              .object({
-                id: z.union([z.string(), z.number()]),
-                text: z.string(),
-                options: z.array(z.string()),
-                correct_index: z.number(),
-                needs_review: z.boolean().optional(),
-                explanation: z.string().optional(),
-              })
-              .passthrough(),
-          ),
-        })
-        .passthrough(),
-    ),
-    admin: z
-      .object({
-        login: z.string(),
-        password: z.string(),
-      })
-      .optional(),
-  })
-  .passthrough();
+  ),
+  demo_users: z.array(
+    z.object({
+      id: z.number(),
+      login: z.string(),
+      password: z.string(),
+      full_name: z.string(),
+      role: z.enum(["admin", "student"]),
+      class_name: z.string().nullable(),
+    }),
+  ),
+});
 
 export type SourceJson = z.infer<typeof sourceJsonSchema>;
 

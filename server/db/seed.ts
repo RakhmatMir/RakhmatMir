@@ -2,151 +2,102 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { SourceJson } from "../../shared/source-json";
+import { sourceJsonSchema, type SourceJson } from "../../shared/source-json";
 import { resolveSourceJsonPath } from "../lib/paths";
 import { getDb, getSqlite } from "./client";
 import * as s from "./schema";
 import "./migrate";
 
 const ENGLISH_DAMAGED_SNIPPET = "pstudent on the register";
+const OBTUSE_EXPLANATION = "90° < угол < 180°";
 
-function displayQuestionText(examId: number, order: number, text: string) {
-  let display = text;
-  if (display.includes("\\n")) {
-    display = display.replace(/\\n/g, "");
-  }
-  if (
-    examId === 102 &&
-    order === 8 &&
-    text.includes(ENGLISH_DAMAGED_SNIPPET)
-  ) {
-    return display;
-  }
-  return display;
+function displayQuestionText(text: string) {
+  return text.includes("\\n") ? text.replace(/\\n/g, "") : text;
 }
 
-function questionNeedsReview(examId: number, order: number, text: string) {
-  if (examId === 102 && order === 8 && text.includes(ENGLISH_DAMAGED_SNIPPET)) {
-    return true;
-  }
-  return false;
-}
-
-function subjectKey(exam: SourceJson["exams"][number], subjects: Map<string, string>) {
-  if (exam.subject) return exam.subject;
-  if (exam.subject_id != null) {
-    const sid = String(exam.subject_id);
-    return subjects.get(sid) ?? sid;
-  }
-  return "unknown";
+function isDamagedEnglishQuestion(examId: number, order: number, text: string) {
+  return examId === 102 && order === 8 && text.includes(ENGLISH_DAMAGED_SNIPPET);
 }
 
 async function importJson(data: SourceJson) {
   const db = getDb();
-  const classId = String(data.class.id);
+  const classMeta = data.classes[0];
+  if (!classMeta) throw new Error("No class in JSON");
+  const classId = classMeta.class_name;
+  const schedule = data.class_schedules[classId];
 
-  const existing = getSqlite()
+  const existingStudents = getSqlite()
     .query("SELECT COUNT(*) as c FROM users WHERE role = 'student'")
     .get() as { c: number };
-  if (existing.c >= 18) {
+  if (existingStudents.c >= 18) {
     console.log("Seed skipped: database already contains student data.");
     return;
   }
 
-  const subjectRows: { id: string; name: string }[] = [];
-  if (data.subjects?.length) {
-    for (const sub of data.subjects) {
-      subjectRows.push({ id: String(sub.id), name: sub.name });
-    }
-  } else {
-    const names = new Set<string>();
-    for (const exam of data.exams) {
-      if (exam.subject) names.add(exam.subject);
-    }
-    [...names].forEach((name, i) => subjectRows.push({ id: `subj-${i + 1}`, name }));
-  }
-
   await db.insert(s.schoolSettings).values({
-    name: data.school.name,
-    telemetryRetentionHours: data.school.telemetry_retention_hours ?? 24,
-    githubUploadEnabled: data.school.github_upload_enabled ?? false,
-    githubToken: data.school.github_token ?? "",
-    resetGeneration: data.school.submissions_reset_generation ?? 7,
-    classBundleLimitMinutes: data.class.bundle_time_limit_minutes ?? 45,
-    bundlePublished: data.class.bundle_published ?? true,
-    examDate: data.class.exam_date ?? "07.10.2026",
+    name: data.school_name,
+    telemetryRetentionHours: data.submissions_retention_hours,
+    githubUploadEnabled: data.submissions_upload.enabled,
+    githubToken: data.submissions_upload.github_token,
+    resetGeneration: data.submissions_reset_generation,
+    classBundleLimitMinutes: schedule?.total_minutes ?? 45,
+    bundlePublished: schedule?.bundle_published ?? true,
+    examDate: data.exams[0]?.control_date ?? "07.10.2026",
   });
 
-  await db.insert(s.classes).values({ id: classId, name: data.class.name });
+  await db.insert(s.classes).values({ id: classId, name: classId });
 
-  for (const sub of subjectRows) {
-    await db.insert(s.subjects).values(sub).onConflictDoNothing();
+  for (const sub of data.subjects) {
+    await db.insert(s.subjects).values({ id: sub.code, name: sub.title });
   }
 
-  const subjectByName = new Map(subjectRows.map((x) => [x.name, x.id]));
-
-  const adminLogin = data.admin?.login ?? "admin";
-  const adminPassword = data.admin?.password ?? "admin123";
-  await db.insert(s.users).values({
-    id: 1,
-    login: adminLogin,
-    passwordHash: bcrypt.hashSync(adminPassword, 10),
-    role: "admin",
-    displayName: "Администратор",
-  });
-
-  for (const student of data.students) {
+  for (const user of data.demo_users) {
     await db.insert(s.users).values({
-      id: student.id,
-      login: student.login,
-      passwordHash: bcrypt.hashSync(student.password, 10),
-      role: "student",
-      displayName: student.name,
+      id: user.id,
+      login: user.login,
+      passwordHash: bcrypt.hashSync(user.password, 10),
+      role: user.role,
+      displayName: user.full_name,
     });
-    await db.insert(s.classMemberships).values({
-      classId,
-      userId: student.id,
-    });
+    if (user.role === "student" && user.class_name) {
+      await db.insert(s.classMemberships).values({
+        classId: user.class_name,
+        userId: user.id,
+      });
+    }
   }
 
   for (const exam of data.exams) {
-    const subjName = subjectKey(exam, new Map(subjectRows.map((x) => [x.id, x.name])));
-    const subjectId = subjectByName.get(subjName) ?? subjectRows[0]!.id;
     let hasNeedsReview = false;
 
     await db.insert(s.exams).values({
       id: exam.id,
-      subjectId,
+      subjectId: exam.subject_code,
       title: exam.title,
-      examDate: exam.date ?? data.class.exam_date ?? "07.10.2026",
+      examDate: exam.control_date,
       durationMinutes: exam.duration_minutes,
-      publishedToStudents: exam.published_to_students ?? false,
+      publishedToStudents: exam.published_to_students,
       hasNeedsReview: false,
     });
 
     let order = 0;
     for (const q of exam.questions) {
       order += 1;
-      const needsReview =
-        q.needs_review === true || questionNeedsReview(exam.id, order, q.text);
+      const needsReview = isDamagedEnglishQuestion(exam.id, order, q.text);
       if (needsReview) hasNeedsReview = true;
-      let explanation = q.explanation ?? null;
-      if (
-        !explanation &&
-        q.text.toLowerCase().includes("туп") &&
-        q.options.some((o) => o.includes("90"))
-      ) {
-        explanation = "90° < угол < 180°";
-      }
+      const explanation =
+        q.text.includes("тупой угол") || q.options.some((o) => o.includes("90°–180°"))
+          ? OBTUSE_EXPLANATION
+          : null;
 
       const [inserted] = await db
         .insert(s.questions)
         .values({
           examId: exam.id,
-          sourceQuestionId: String(q.id),
+          sourceQuestionId: String(order),
           sortOrder: order,
           textOriginal: q.text,
-          textDisplay: displayQuestionText(exam.id, order, q.text),
+          textDisplay: displayQuestionText(q.text),
           correctIndex: q.correct_index,
           needsReview,
           reviewConfirmed: false,
@@ -171,16 +122,20 @@ async function importJson(data: SourceJson) {
     }
   }
 
+  const roster = data.rosters[classId] ?? [];
+  const has402 = roster.some((r) => r.id === 402);
+  if (roster.length !== 18 || !has402) {
+    console.warn("Roster check: expected 18 students including id 402");
+  }
+
   console.log(
-    `Seed complete: ${data.students.length} students, ${data.exams.length} exams, admin ${adminLogin}`,
+    `Seed complete: ${data.demo_users.filter((u) => u.role === "student").length} students, ${data.exams.length} exams, ${data.demo_users.length} users total`,
   );
 }
 
 const sourcePath = resolveSourceJsonPath();
 if (!sourcePath) {
-  console.error(
-    "Исходный JSON не найден. Положите файл в source-materials/ (см. source-materials/README.md) и запустите снова: bun run seed",
-  );
+  console.error("Исходный JSON не найден в source-materials/");
   process.exit(1);
 }
 
@@ -191,5 +146,5 @@ if (!existsSync(archive)) {
 }
 
 const raw = await Bun.file(sourcePath).json();
-const parsed = (await import("../../shared/source-json")).sourceJsonSchema.parse(raw);
+const parsed = sourceJsonSchema.parse(raw);
 await importJson(parsed);
