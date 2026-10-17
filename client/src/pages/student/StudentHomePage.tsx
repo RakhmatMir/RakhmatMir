@@ -41,7 +41,7 @@ export function StudentHomePage({ user }: { user: User }) {
                     className="btn btn-primary"
                     onClick={async () => {
                       const res = await api.startExam(exam.id);
-                      window.location.href = `/student/attempts/${res.attemptId}`;
+                      window.location.hash = `#/student/attempts/${res.attemptId}`;
                     }}
                   >
                     Начать

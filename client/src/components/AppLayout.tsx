@@ -30,7 +30,8 @@ export function AppLayout({
           style={{ marginTop: 12, width: "100%", background: "rgba(255,255,255,0.15)", color: "#fff" }}
           onClick={async () => {
             await api.logout();
-            window.location.href = "/login";
+            window.location.hash = "#/login";
+            window.location.reload();
           }}
         >
           Выйти
