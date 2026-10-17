@@ -16,7 +16,12 @@ export function LoginPage() {
     try {
       const res = await api.login(login, password);
       setCsrf(res.csrfToken);
-      nav(res.user.role === "admin" ? "/admin" : "/student", { replace: true });
+      if (import.meta.env.VITE_PAGES_DEMO === "true") {
+        window.location.hash = res.user.role === "admin" ? "#/admin" : "#/student";
+        window.location.reload();
+      } else {
+        nav(res.user.role === "admin" ? "/admin" : "/student", { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка входа");
     } finally {
