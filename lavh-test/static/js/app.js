@@ -128,9 +128,7 @@ const AUTH_ERRORS = {
 function renderAuth(options = {}) {
   const error = typeof options === "string" ? options : options.error || "";
   const registerOk = options.registerOk || null;
-  const authPanel = options.authPanel || (registerOk ? "login" : "login");
-  const panel = options.authPanel || (registerOk ? "login" : authPanel);
-  const showRegister = panel === "register";
+  const showRegister = (options.authPanel || "login") === "register";
 
   const loginCard = `
     <form class="auth-card auth-panel" id="login-form" ${showRegister ? 'hidden' : ""}>
