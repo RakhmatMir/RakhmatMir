@@ -73,8 +73,14 @@ function navItems() {
   return VIEWS.student;
 }
 
+function setMobileNavOpen(open) {
+  document.querySelector(".shell")?.classList.toggle("nav-open", open);
+  document.body.classList.toggle("nav-drawer-open", open);
+}
+
 async function switchView(id) {
   if (state.view === id || state.leaving) return;
+  setMobileNavOpen(false);
   state.leaving = true;
   const stage = document.querySelector(".main-panel");
   if (stage) stage.classList.add("is-leaving");
@@ -637,7 +643,9 @@ async function renderShell() {
 
   $app.innerHTML = `
     <div class="shell">
-      <aside class="sidebar">
+      <button type="button" class="nav-overlay" id="nav-overlay" aria-label="Закрыть меню" tabindex="-1"></button>
+      <aside class="sidebar" id="app-sidebar">
+        <button type="button" class="sidebar-close" id="nav-close" aria-label="Закрыть меню">×</button>
         <div class="sidebar-brand">
           ${logoImg("sidebar")}
           <div class="logo">LAVH TEST</div>
@@ -655,20 +663,49 @@ async function renderShell() {
         </div>
       </aside>
       <main class="main">
-        <header class="main-header">
-          <h1>${escapeHtml(title)}</h1>
-          <p>${escapeHtml(sub)}</p>
-        </header>
+        <div class="main-topbar">
+          <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Открыть меню" aria-expanded="false">
+            <span class="nav-toggle-bar"></span>
+            <span class="nav-toggle-bar"></span>
+            <span class="nav-toggle-bar"></span>
+          </button>
+          <header class="main-header main-header--compact">
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(sub)}</p>
+          </header>
+        </div>
         <div class="main-stage">
           <div class="main-panel">${content}</div>
         </div>
       </main>
     </div>`;
 
+  const shell = document.querySelector(".shell");
+  const toggle = document.getElementById("nav-toggle");
+  const syncNavAria = (open) => {
+    toggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  toggle?.addEventListener("click", () => {
+    const open = !shell?.classList.contains("nav-open");
+    setMobileNavOpen(open);
+    syncNavAria(open);
+  });
+  document.getElementById("nav-overlay")?.addEventListener("click", () => {
+    setMobileNavOpen(false);
+    syncNavAria(false);
+  });
+  document.getElementById("nav-close")?.addEventListener("click", () => {
+    setMobileNavOpen(false);
+    syncNavAria(false);
+  });
+
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
-  document.getElementById("btn-logout")?.addEventListener("click", () => logout());
+  document.getElementById("btn-logout")?.addEventListener("click", () => {
+    setMobileNavOpen(false);
+    logout();
+  });
   bindTestList();
   bindExam();
   document.getElementById("btn-details")?.addEventListener("click", () => alert("В полной версии — окно с ответами по каждому вопросу."));
