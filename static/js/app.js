@@ -7,6 +7,7 @@ const state = {
   session: null,
   view: "home",
   uiMode: "student",
+  userKind: null,
   leaving: false,
   exam: null,
   bundle: null,
@@ -127,61 +128,79 @@ const AUTH_ERRORS = {
 function renderAuth(options = {}) {
   const error = typeof options === "string" ? options : options.error || "";
   const registerOk = options.registerOk || null;
+  const authPanel = options.authPanel || (registerOk ? "login" : "login");
+  const panel = options.authPanel || (registerOk ? "login" : authPanel);
+  const showRegister = panel === "register";
+
+  const loginCard = `
+    <form class="auth-card auth-panel" id="login-form" ${showRegister ? 'hidden' : ""}>
+      <h2>Вход</h2>
+      <p class="sub">Администрация, школа или ваш аккаунт</p>
+      ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите ниже.</p>` : ""}
+      ${error && !showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
+      <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
+      <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
+      <button type="submit" class="btn-primary">Войти</button>
+      <p class="auth-switch">
+        <button type="button" class="auth-link" id="show-register">Регистрация</button>
+      </p>
+    </form>`;
+
+  const registerCard = `
+    <form class="auth-card auth-panel auth-card-register" id="register-form" ${showRegister ? "" : "hidden"}>
+      <h2>Регистрация</h2>
+      <p class="sub">Свободный доступ · логин придёт в Telegram (позже)</p>
+      ${error && showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
+      <label class="field"><span>Имя</span><input name="full_name" required autocomplete="name" placeholder="Как к вам обращаться" /></label>
+      <label class="field"><span>Telegram</span><input name="telegram" autocomplete="username" placeholder="@username" /></label>
+      <label class="field"><span>Логин</span><input name="login" required autocomplete="username" minlength="3" placeholder="латиница, цифры" /></label>
+      <label class="field"><span>Пароль</span><input name="password" type="password" required minlength="6" autocomplete="new-password" /></label>
+      <label class="field"><span>Повторите пароль</span><input name="password2" type="password" required minlength="6" autocomplete="new-password" /></label>
+      <button type="submit" class="btn-register">Создать аккаунт</button>
+      <p class="auth-switch">
+        <button type="button" class="auth-link" id="show-login">Уже есть аккаунт? Вход</button>
+      </p>
+    </form>`;
 
   $app.innerHTML = `
     <div class="auth-screen">
       <div class="auth-chevrons">${">".repeat(7)}</div>
       <div class="auth-left">
         <h1>LAVH TEST</h1>
-        <p>Платформа автоматизированного тестирования для школ и самостоятельной подготовки. Войдите или зарегистрируйтесь — демо без сервера.</p>
+        <p>Платформа автоматизированного тестирования для школ и самостоятельной подготовки.</p>
       </div>
-      <div class="auth-stack">
-        <form class="auth-card" id="login-form">
-          <h2>Вход</h2>
-          <p class="sub">Администрация, школа или ваш аккаунт</p>
-          ${error ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
-          <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
-          <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
-          <button type="submit" class="btn-primary">Войти</button>
+      <div class="auth-column">
+        <div class="auth-stack">
+          ${loginCard}
+          ${registerCard}
+        </div>
+        <aside class="auth-demo-block" aria-label="Демо-вход (временно)">
+          <p class="auth-demo-label">Демо-доступ</p>
           <div class="demo-pills">
             ${DEMO_ACCOUNTS.map(
-              (d) => `<button type="button" class="demo-pill" data-demo="${d.label}">${d.label} — демо</button>`
+              (d) => `<button type="button" class="demo-pill" data-demo="${d.label}">${d.label}</button>`
             ).join("")}
           </div>
-        </form>
-
-        <div class="auth-divider" aria-hidden="true"><span>Регистрация</span></div>
-
-        <form class="auth-card auth-card-register" id="register-form">
-          <h2>Регистрация</h2>
-          <p class="sub">Свободный доступ · логин придёт в Telegram (позже)</p>
-          ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите выше. Отправка в Telegram подключится на сервере.</p>` : ""}
-          <label class="field"><span>Имя</span><input name="full_name" required autocomplete="name" placeholder="Как к вам обращаться" /></label>
-          <label class="field"><span>Telegram</span><input name="telegram" autocomplete="username" placeholder="@username" /></label>
-          <label class="field"><span>Логин</span><input name="login" required autocomplete="username" minlength="3" placeholder="латиница, цифры" /></label>
-          <label class="field"><span>Пароль</span><input name="password" type="password" required minlength="6" autocomplete="new-password" /></label>
-          <label class="field"><span>Повторите пароль</span><input name="password2" type="password" required minlength="6" autocomplete="new-password" /></label>
-          <button type="submit" class="btn-register">Создать аккаунт</button>
-        </form>
+        </aside>
       </div>
       <div class="brand-footer"><strong>LAVH</strong> EDUCATIONAL TECHNOLOGY</div>
     </div>`;
 
-  document.getElementById("login-form").addEventListener("submit", async (e) => {
+  document.getElementById("login-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
       await login(fd.get("login"), fd.get("password"), null);
     } catch {
-      renderAuth({ error: "Неверный логин или пароль" });
+      renderAuth({ error: "Неверный логин или пароль", authPanel: "login" });
     }
   });
 
-  document.getElementById("register-form").addEventListener("submit", (e) => {
+  document.getElementById("register-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     if (fd.get("password") !== fd.get("password2")) {
-      renderAuth({ error: AUTH_ERRORS.password_mismatch });
+      renderAuth({ error: AUTH_ERRORS.password_mismatch, authPanel: "register" });
       return;
     }
     try {
@@ -191,17 +210,24 @@ function renderAuth(options = {}) {
         fullName: fd.get("full_name"),
         telegram: fd.get("telegram"),
       });
-      renderAuth({ registerOk: { login: user.login } });
+      renderAuth({ registerOk: { login: user.login }, authPanel: "login" });
     } catch (err) {
-      renderAuth({ error: AUTH_ERRORS[err.message] || "Не удалось зарегистрироваться" });
+      renderAuth({ error: AUTH_ERRORS[err.message] || "Не удалось зарегистрироваться", authPanel: "register" });
     }
+  });
+
+  document.getElementById("show-register")?.addEventListener("click", () => {
+    renderAuth({ authPanel: "register" });
+  });
+  document.getElementById("show-login")?.addEventListener("click", () => {
+    renderAuth({ authPanel: "login" });
   });
 
   document.querySelectorAll("[data-demo]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const acc = DEMO_ACCOUNTS.find((d) => d.label === btn.dataset.demo);
       if (!acc) return;
-      login(acc.login, acc.password, acc.uiMode).catch(() => renderAuth({ error: "Ошибка входа" }));
+      login(acc.login, acc.password, acc.uiMode).catch(() => renderAuth({ error: "Ошибка входа", authPanel: "login" }));
     });
   });
 }
