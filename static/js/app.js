@@ -36,6 +36,12 @@ const VIEWS = {
   ],
 };
 
+const LOGO_SRC = "assets/lavh-logo.png";
+
+function logoImg(size = "md", alt = "LAVH Educational Technology") {
+  return `<img class="lavh-logo lavh-logo--${size}" src="${LOGO_SRC}" alt="${escapeHtml(alt)}" decoding="async" />`;
+}
+
 const DEMO_ACCOUNTS = [
   { label: "Админ", login: "admin", password: "admin123", uiMode: "admin" },
   { label: "Учитель", login: "admin", password: "admin123", uiMode: "teacher" },
@@ -164,6 +170,7 @@ function renderAuth(options = {}) {
     <div class="auth-screen">
       <div class="auth-chevrons">${">".repeat(7)}</div>
       <div class="auth-left">
+        <div class="auth-logo-wrap">${logoImg("hero")}</div>
         <h1>LAVH TEST</h1>
         <p>Платформа автоматизированного тестирования для школ и самостоятельной подготовки.</p>
       </div>
@@ -181,7 +188,7 @@ function renderAuth(options = {}) {
           </div>
         </aside>
       </div>
-      <div class="brand-footer"><strong>LAVH</strong> EDUCATIONAL TECHNOLOGY</div>
+      <div class="brand-footer">${logoImg("footer")}<span class="brand-footer-text">Educational Technology</span></div>
     </div>`;
 
   document.getElementById("login-form")?.addEventListener("submit", async (e) => {
@@ -633,6 +640,7 @@ async function renderShell() {
     <div class="shell">
       <aside class="sidebar">
         <div class="sidebar-brand">
+          ${logoImg("sidebar")}
           <div class="logo">LAVH TEST</div>
           <small>Educational technology</small>
         </div>
