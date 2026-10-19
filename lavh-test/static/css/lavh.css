@@ -59,20 +59,6 @@ body {
   opacity: 0.95;
 }
 
-.auth-chevrons {
-  position: absolute;
-  top: 24px;
-  right: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #ff8c42;
-  font-size: 1.1rem;
-  font-weight: 800;
-  line-height: 0.7;
-  opacity: 0.85;
-}
-
 .auth-left {
   padding: 48px 56px;
   display: flex;
