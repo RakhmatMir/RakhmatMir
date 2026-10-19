@@ -10,6 +10,7 @@
   --lavh-text: #1a1f36;
   --lavh-muted: #6b7280;
   --lavh-border: #e5e7eb;
+  --lavh-brand-gold: #8e7e69;
   --lavh-radius: 20px;
   --lavh-radius-sm: 12px;
   --lavh-shadow: 0 12px 40px rgba(26, 31, 54, 0.08);
@@ -78,6 +79,44 @@ body {
   flex-direction: column;
   justify-content: center;
   z-index: 1;
+}
+
+.auth-logo-wrap {
+  width: fit-content;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: #0a0a0a;
+  border-radius: var(--lavh-radius-sm);
+  box-shadow: var(--lavh-shadow);
+}
+
+.lavh-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.lavh-logo--hero {
+  width: min(140px, 40vw);
+  height: auto;
+}
+
+.lavh-logo--sidebar {
+  width: 56px;
+  height: auto;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: #0a0a0a;
+  padding: 6px;
+}
+
+.lavh-logo--footer {
+  width: 72px;
+  height: auto;
+  margin-left: auto;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #0a0a0a;
+  padding: 4px;
 }
 
 .auth-left h1 {
@@ -284,11 +323,12 @@ body {
   z-index: 1;
 }
 
-.brand-footer strong {
+.brand-footer-text {
   display: block;
-  font-size: 1rem;
-  color: var(--lavh-text);
-  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  color: var(--lavh-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* —— Shell —— */
