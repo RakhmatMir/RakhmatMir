@@ -48,7 +48,7 @@
 ## 🧪 LAVH TEST (демо UI)
 
 Интерфейс школьного портала в стиле LAVH: [lavh-test/README.md](lavh-test/README.md)  
-После публикации Pages: **https://rakhmatmir.github.io/RakhmatMir/lavh-test/**
+Демо: **https://rakhmatmir.github.io/RakhmatMir/** (ветка `gh-pages`)
 
 ---
 

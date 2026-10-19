@@ -1,4 +1,4 @@
-name: Deploy LAVH Test demo
+name: Publish LAVH TEST demo (gh-pages)
 
 on:
   push:
@@ -9,25 +9,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: lavh-test-pages
-  cancel-in-progress: true
+  group: lavh-test-gh-pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          cp -r lavh-test/. _site/
+          touch _site/.nojekyll
+      - uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: lavh-test
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          folder: _site
+          branch: gh-pages
+          clean: true

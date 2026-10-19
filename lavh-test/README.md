@@ -19,7 +19,8 @@ python3 -m http.server 8080
 
 Откройте http://127.0.0.1:8080
 
-После merge в `main` — GitHub Pages:  
-**https://rakhmatmir.github.io/RakhmatMir/lavh-test/** (если Pages включены для репозитория).
+Публичная ссылка (ветка `gh-pages`, настройки репо → Pages → **Deploy from branch `gh-pages` / root**):
+
+**https://rakhmatmir.github.io/RakhmatMir/**
 
 Данные и логика тестов — `data/portal.json` + `static/js/portal-data.js` (демо-режим в браузере).
