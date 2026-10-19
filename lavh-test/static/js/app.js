@@ -1,3 +1,4 @@
+import { findRegisteredUser, registerPublicUser } from "./auth-local.js";
 import { dataApi, demoAuthApi, loadPortalBundle } from "./portal-data.js";
 
 const $app = document.getElementById("app");
@@ -77,11 +78,32 @@ async function switchView(id) {
 }
 
 async function login(loginVal, password, uiMode) {
+  const registered = findRegisteredUser(loginVal, password);
+  if (registered) {
+    state.session = {
+      user: {
+        id: registered.id,
+        login: registered.login,
+        full_name: registered.full_name,
+        role: "student",
+        class_name: null,
+      },
+      school_name: "LAVH TEST",
+    };
+    state.uiMode = "student";
+    state.userKind = "public";
+    state.view = "home";
+    state.bundle = await loadPortalBundle({ fresh: true });
+    renderShell();
+    return;
+  }
+
   const session = await api("/api/login", {
     method: "POST",
     body: JSON.stringify({ login: loginVal, password: password }),
   });
   state.session = session;
+  state.userKind = "school";
   state.uiMode = uiMode || (session.user.role === "admin" ? "admin" : "student");
   state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
   state.bundle = await loadPortalBundle({ fresh: true });
@@ -95,28 +117,54 @@ async function logout() {
   renderAuth();
 }
 
-function renderAuth(error = "") {
+const AUTH_ERRORS = {
+  login_short: "Логин не короче 3 символов",
+  password_short: "Пароль не короче 6 символов",
+  login_taken: "Такой логин уже занят",
+  password_mismatch: "Пароли не совпадают",
+};
+
+function renderAuth(options = {}) {
+  const error = typeof options === "string" ? options : options.error || "";
+  const registerOk = options.registerOk || null;
+
   $app.innerHTML = `
     <div class="auth-screen">
       <div class="auth-chevrons">${">".repeat(7)}</div>
       <div class="auth-left">
-        <h1>Вход в личный кабинет</h1>
-        <p>Платформа для тестов работает через индивидуальный доступ. Каждому ученику выдаётся отдельный логин и пароль.</p>
+        <h1>LAVH TEST</h1>
+        <p>Платформа автоматизированного тестирования для школ и самостоятельной подготовки. Войдите или зарегистрируйтесь — демо без сервера.</p>
       </div>
-      <form class="auth-card" id="login-form">
-        <h2>LAVH TEST</h2>
-        <p class="sub">Вход для администрации и учеников · демо</p>
-        ${error ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
-        <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
-        <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
-        <button type="submit" class="btn-primary">Войти</button>
-        <div class="demo-pills">
-          ${DEMO_ACCOUNTS.map(
-            (d) => `<button type="button" class="demo-pill" data-demo="${d.label}">${d.label} — демо</button>`
-          ).join("")}
-        </div>
-      </form>
-      <div class="brand-footer"><strong>LAVH</strong>EDUCATIONAL TECHNOLOGY</div>
+      <div class="auth-stack">
+        <form class="auth-card" id="login-form">
+          <h2>Вход</h2>
+          <p class="sub">Администрация, школа или ваш аккаунт</p>
+          ${error ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
+          <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
+          <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
+          <button type="submit" class="btn-primary">Войти</button>
+          <div class="demo-pills">
+            ${DEMO_ACCOUNTS.map(
+              (d) => `<button type="button" class="demo-pill" data-demo="${d.label}">${d.label} — демо</button>`
+            ).join("")}
+          </div>
+        </form>
+
+        <div class="auth-divider" aria-hidden="true"><span>Регистрация</span></div>
+
+        <form class="auth-card auth-card-register" id="register-form">
+          <h2>Регистрация</h2>
+          <p class="sub">Свободный доступ · логин придёт в Telegram (позже)</p>
+          ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите выше. Отправка в Telegram подключится на сервере.</p>` : ""}
+          <label class="field"><span>Имя</span><input name="full_name" required autocomplete="name" placeholder="Как к вам обращаться" /></label>
+          <label class="field"><span>Telegram</span><input name="telegram" autocomplete="username" placeholder="@username" /></label>
+          <label class="field"><span>Логин</span><input name="login" required autocomplete="username" minlength="3" placeholder="латиница, цифры" /></label>
+          <label class="field"><span>Пароль</span><input name="password" type="password" required minlength="6" autocomplete="new-password" /></label>
+          <label class="field"><span>Повторите пароль</span><input name="password2" type="password" required minlength="6" autocomplete="new-password" /></label>
+          <button type="submit" class="btn-register">Создать аккаунт</button>
+        </form>
+      </div>
+      <div class="brand-footer"><strong>LAVH</strong> EDUCATIONAL TECHNOLOGY</div>
     </div>`;
 
   document.getElementById("login-form").addEventListener("submit", async (e) => {
@@ -125,7 +173,27 @@ function renderAuth(error = "") {
     try {
       await login(fd.get("login"), fd.get("password"), null);
     } catch {
-      renderAuth("Неверный логин или пароль");
+      renderAuth({ error: "Неверный логин или пароль" });
+    }
+  });
+
+  document.getElementById("register-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    if (fd.get("password") !== fd.get("password2")) {
+      renderAuth({ error: AUTH_ERRORS.password_mismatch });
+      return;
+    }
+    try {
+      const user = registerPublicUser({
+        login: fd.get("login"),
+        password: fd.get("password"),
+        fullName: fd.get("full_name"),
+        telegram: fd.get("telegram"),
+      });
+      renderAuth({ registerOk: { login: user.login } });
+    } catch (err) {
+      renderAuth({ error: AUTH_ERRORS[err.message] || "Не удалось зарегистрироваться" });
     }
   });
 
@@ -133,7 +201,7 @@ function renderAuth(error = "") {
     btn.addEventListener("click", () => {
       const acc = DEMO_ACCOUNTS.find((d) => d.label === btn.dataset.demo);
       if (!acc) return;
-      login(acc.login, acc.password, acc.uiMode).catch(() => renderAuth("Ошибка входа"));
+      login(acc.login, acc.password, acc.uiMode).catch(() => renderAuth({ error: "Ошибка входа" }));
     });
   });
 }
