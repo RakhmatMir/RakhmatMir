@@ -1,0 +1,572 @@
+{
+  "school_name": "Foundation School — демо",
+  "classes": [
+    {
+      "class_name": "6Б",
+      "student_count": 18,
+      "test_count": 3
+    }
+  ],
+  "class_schedules": {
+    "6Б": {
+      "total_minutes": 45,
+      "bundle_published": true
+    }
+  },
+  "submissions_reset_generation": 7,
+  "submissions_retention_hours": 24,
+  "submissions_upload": {
+    "enabled": false,
+    "github_token": ""
+  },
+  "cleared_student_ids": [],
+  "subjects": [
+    {
+      "code": "math",
+      "title": "Математика",
+      "test_count": 1
+    },
+    {
+      "code": "russian",
+      "title": "Русский язык",
+      "test_count": 1
+    },
+    {
+      "code": "english",
+      "title": "Английский язык",
+      "test_count": 1
+    }
+  ],
+  "exams": [
+    {
+      "id": 101,
+      "class_name": "6Б",
+      "subject_code": "math",
+      "subject_title": "Математика",
+      "title": "Контрольная по математике (демо)",
+      "control_date": "07.10.2026",
+      "duration_minutes": 30,
+      "kind_label": "Тест",
+      "phase": "active",
+      "catalog_key": "todo",
+      "requires_teacher_publish": true,
+      "published_to_students": false,
+      "question_count": 16,
+      "questions": [
+        {
+          "text": "Значение выражения 18 - 3·4 + 2:",
+          "options": ["32", "8", "20", "12"],
+          "correct_index": 1
+        },
+        {
+          "text": "Какое число является делителем 48?",
+          "options": ["14", "8", "9", "7"],
+          "correct_index": 1
+        },
+        {
+          "text": "Найдите сумму: -12 + 5",
+          "options": ["-17", "-7", "7", "17"],
+          "correct_index": 1
+        },
+        {
+          "text": "Какое из чисел является простым?",
+          "options": ["19", "21", "25", "27"],
+          "correct_index": 0
+        },
+        {
+          "text": "Значение выражения 3/8 + 5/16:",
+          "options": ["11/16", "2", "7/8", "5/16"],
+          "correct_index": 0
+        },
+        {
+          "text": "Решите уравнение 5х + 10 = 35:",
+          "options": ["3", "5", "7", "10"],
+          "correct_index": 1
+        },
+        {
+          "text": "Сколько градусов имеет тупой угол?",
+          "options": ["< 90°", "= 90°", "90°–180°", "> 180°"],
+          "correct_index": 2
+        },
+        {
+          "text": "Периметр квадрата со стороной 6 см:",
+          "options": ["12", "18", "24", "36"],
+          "correct_index": 2
+        },
+        {
+          "text": "НОД(24, 36):",
+          "options": ["6", "12", "24", "36"],
+          "correct_index": 1
+        },
+        {
+          "text": "НОК(6, 8):",
+          "options": ["12", "24", "14", "48"],
+          "correct_index": 1
+        },
+        {
+          "text": "Значение 4² + 2³:",
+          "options": ["24", "20", "18", "12"],
+          "correct_index": 0
+        },
+        {
+          "text": "30% от 200:",
+          "options": ["30", "60", "90", "120"],
+          "correct_index": 1
+        },
+        {
+          "text": "Какое число рациональное?\\н",
+          "options": ["√2", "√9", "π", "√5"],
+          "correct_index": 1
+        },
+        {
+          "text": "Радиус, если диаметр 14 см:",
+          "options": ["3", "7", "14", "28"],
+          "correct_index": 1
+        },
+        {
+          "text": "Среднее арифметическое 4, 8, 12:",
+          "options": ["8", "6", "10", "12"],
+          "correct_index": 0
+        },
+        {
+          "text": "Периметр прямоугольника 5×9:",
+          "options": ["14", "28", "45", "90"],
+          "correct_index": 1
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "class_name": "6Б",
+      "subject_code": "russian",
+      "subject_title": "Русский язык",
+      "title": "Контрольная по русскому языку (демо)",
+      "control_date": "07.10.2026",
+      "duration_minutes": 30,
+      "kind_label": "Тест",
+      "phase": "active",
+      "catalog_key": "todo",
+      "requires_teacher_publish": true,
+      "published_to_students": false,
+      "question_count": 15,
+      "questions": [
+        {
+          "text": "Укажите слово с НЕПРАВИЛЬНО выделенным корнем.",
+          "options": ["под-вод-ный", "без-ветр-енн-ый", "кор-ень", "пере-ход"],
+          "correct_index": 2
+        },
+        {
+          "text": "Укажите ряд, где все слова — синонимы.",
+          "options": ["красивый, прекрасный, симпатичный", "дом, город, страна", "зелёный, зрелый, звонкий", "быстро, медленно, шепотом"],
+          "correct_index": 0
+        },
+        {
+          "text": "Укажите имя существительное.",
+          "options": ["читать", "весёлый", "игра", "дружно"],
+          "correct_index": 2
+        },
+        {
+          "text": "Укажите верное написание.",
+          "options": ["здороваются", "здароваются", "сдороваются", "здароваюца"],
+          "correct_index": 0
+        },
+        {
+          "text": "Укажите антоним к слову «смелый».",
+          "options": ["трусливый", "весёлый", "мудрый", "сильный"],
+          "correct_index": 0
+        },
+        {
+          "text": "В каком слове ударение поставлено правильно?",
+          "options": ["крАсивее", "красИвее", "красивЕе", "красивеЕ"],
+          "correct_index": 1
+        },
+        {
+          "text": "Укажите прилагательное.",
+          "options": ["холод", "холодный", "холодно", "охлаждать"],
+          "correct_index": 1
+        },
+        {
+          "text": "В каком слове есть приставка?",
+          "options": ["писатель", "письмо", "писать", "надписать"],
+          "correct_index": 3
+        },
+        {
+          "text": "Укажите слово с разделительным Ь.",
+          "options": ["любовь", "львы", "семья", "апрель"],
+          "correct_index": 2
+        },
+        {
+          "text": "Укажите слово, в котором 2 слога.",
+          "options": ["вода", "комната", "крик", "молоко"],
+          "correct_index": 0
+        },
+        {
+          "text": "Укажите имя существительное 1 склонения",
+          "options": ["радость", "рассказ", "строение", "стена"],
+          "correct_index": 3
+        },
+        {
+          "text": "Укажите ряд, где все слова — наречия.",
+          "options": ["громко, быстро, далеко", "громкий, быстрый, далекий", "громить, бежать, думать", "громкий, вдаль, быстро"],
+          "correct_index": 0
+        },
+        {
+          "text": "Какое слово пишется через Е?",
+          "options": ["пр..мерять (одежду)", "пр..мирить (врагов)", "пр..нять", "пр..бывать (время)"],
+          "correct_index": 0
+        },
+        {
+          "text": "Укажите однокоренное слово к «лесной».",
+          "options": ["лисица", "лесок", "лестный", "полезный"],
+          "correct_index": 1
+        },
+        {
+          "text": "Укажите предлог.",
+          "options": ["около", "околоток", "околесица", "околеть"],
+          "correct_index": 0
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "class_name": "6Б",
+      "subject_code": "english",
+      "subject_title": "Английский язык",
+      "title": "A1 — Choose the correct answer (Tursunova Barno)",
+      "control_date": "07.10.2026",
+      "duration_minutes": 25,
+      "kind_label": "Тест A1",
+      "phase": "active",
+      "catalog_key": "todo",
+      "requires_teacher_publish": true,
+      "published_to_students": false,
+      "question_count": 10,
+      "questions": [
+        {
+          "text": "___ your brother usually celebrate his birthday with his classmates?",
+          "options": ["Does", "Do", "Doesn't"],
+          "correct_index": 0
+        },
+        {
+          "text": "My birthday is on the ___ of September, and I am ___ years old.",
+          "options": ["twenty-one / twenty-first", "twenty-first / twenty-one", "twenty-first / twenty-first"],
+          "correct_index": 1
+        },
+        {
+          "text": "They ___ usually have a party on weekdays because their parents work.",
+          "options": ["doesn't", "does", "don't"],
+          "correct_index": 2
+        },
+        {
+          "text": "___ your parents buy you a present every year?",
+          "options": ["Do", "Does", "Doesn't"],
+          "correct_index": 0
+        },
+        {
+          "text": "My sister was born on the ___ of February. She is ___ years old now.",
+          "options": ["twelve / twelfth", "twelfth / twelve", "twelfth / twelfth"],
+          "correct_index": 1
+        },
+        {
+          "text": "Anna ___ like big birthday parties, but she ___ enjoy having dinner with her family.",
+          "options": ["doesn't / does", "don't / does", "doesn't / do"],
+          "correct_index": 0
+        },
+        {
+          "text": "Which sentence is correct?",
+          "options": [
+            "Does they have a birthday party every year?",
+            "Do they has a birthday party every year?",
+            "Do they have a birthday party every year?"
+          ],
+          "correct_index": 2
+        },
+        {
+          "text": "There are twenty-first. They ___ usually have a pstudent on the register.",
+          "options": ["thirty / thirtieth", "thirtieth / thirty", "thirteen / thirteenth"],
+          "correct_index": 0
+        },
+        {
+          "text": "“___ you have your birthday party at home?” — “No, we ___.”",
+          "options": ["Does / don't", "Do / don't", "Do / doesn't"],
+          "correct_index": 1
+        },
+        {
+          "text": "My birthday is on the ___ of November. I usually invite ___ friends.",
+          "options": ["twenty-second / twenty-two", "twenty-two / twenty-second", "twenty-second / twenty-second"],
+          "correct_index": 0
+        }
+      ]
+    }
+  ],
+  "rosters": {
+    "6Б": [
+      {
+        "id": 401,
+        "full_name": "Аскаралиева Фарахноз",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 403,
+        "full_name": "Дилмуродова Имронбек",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 404,
+        "full_name": "Мамирова Жахоноробегим",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 405,
+        "full_name": "Ганиев Аброрбек",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 406,
+        "full_name": "Джалолов Мухаммад",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 407,
+        "full_name": "Абдупаттаев Нурбек",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 408,
+        "full_name": "Ахунжанова Асила",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 409,
+        "full_name": "Абдуллаев Фирдавс",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 410,
+        "full_name": "Холмирзаева Асрорахон",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 411,
+        "full_name": "Зайтулаева София",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 412,
+        "full_name": "Кинжалова Асаль",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 413,
+        "full_name": "Мамаджанова Афруза",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 414,
+        "full_name": "Дадабоев Мухаммадюсуф",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 415,
+        "full_name": "Касимов Мухаммад Иброхим",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 416,
+        "full_name": "Умаров Абубакир",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 417,
+        "full_name": "Хайдаров Солих",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 418,
+        "full_name": "Махмудов Амирхон",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 402,
+        "full_name": "Рафиков Ризкхожа",
+        "status": "not_started",
+        "score_percent": null
+      }
+    ]
+  },
+  "demo_users": [
+    {
+      "id": 1,
+      "login": "admin",
+      "password": "admin123",
+      "full_name": "Главный админ",
+      "role": "admin",
+      "class_name": null
+    },
+    {
+      "id": 401,
+      "login": "6b01",
+      "password": "6b01-401",
+      "full_name": "Аскаралиева Фарахноз",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 403,
+      "login": "6b03",
+      "password": "6b03-403",
+      "full_name": "Дилмуродова Имронбек",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 404,
+      "login": "6b04",
+      "password": "6b04-404",
+      "full_name": "Мамирова Жахоноробегим",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 405,
+      "login": "6b05",
+      "password": "6b05-405",
+      "full_name": "Ганиев Аброрбек",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 406,
+      "login": "6b06",
+      "password": "6b06-406",
+      "full_name": "Джалолов Мухаммад",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 407,
+      "login": "6b07",
+      "password": "6b07-407",
+      "full_name": "Абдупаттаев Нурбек",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 408,
+      "login": "6b08",
+      "password": "6b08-408",
+      "full_name": "Ахунжанова Асила",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 409,
+      "login": "6b09",
+      "password": "6b09-409",
+      "full_name": "Абдуллаев Фирдавс",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 410,
+      "login": "6b10",
+      "password": "6b10-410",
+      "full_name": "Холмирзаева Асрорахон",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 411,
+      "login": "6b11",
+      "password": "6b11-411",
+      "full_name": "Зайтулаева София",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 412,
+      "login": "6b12",
+      "password": "6b12-412",
+      "full_name": "Кинжалова Асаль",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 413,
+      "login": "6b13",
+      "password": "6b13-413",
+      "full_name": "Мамаджанова Афруза",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 414,
+      "login": "6b14",
+      "password": "6b14-414",
+      "full_name": "Дадабоев Мухаммадюсуф",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 415,
+      "login": "6b15",
+      "password": "6b15-415",
+      "full_name": "Касимов Мухаммад Иброхим",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 416,
+      "login": "6b16",
+      "password": "6b16-416",
+      "full_name": "Умаров Абубакир",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 417,
+      "login": "6b17",
+      "password": "6b17-417",
+      "full_name": "Хайдаров Солих",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 418,
+      "login": "6b18",
+      "password": "6b18-418",
+      "full_name": "Махмудов Амирхон",
+      "role": "student",
+      "class_name": "6Б"
+    },
+    {
+      "id": 402,
+      "login": "6b02",
+      "password": "6b02-402",
+      "full_name": "Рафиков Ризкхожа",
+      "role": "student",
+      "class_name": "6Б"
+    }
+  ],
+  "demo_exam_answers": {},
+  "demo_question_times": {},
+  "demo_question_exit_counts": {},
+  "demo_question_away_seconds": {}
+}

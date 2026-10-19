@@ -1,0 +1,3 @@
+school-portal/server/node_modules/
+school-portal/data/runtime/*
+!school-portal/data/runtime/.gitkeep

@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Exam Site Demo", "version": "1.0.0" },
+  "paths": {
+    "/": { "get": { "summary": "Index" } },
+    "/api/public/landing": { "get": { "summary": "Public Landing" } },
+    "/api/login": { "post": { "summary": "Login" } },
+    "/api/logout": { "post": { "summary": "Logout" } },
+    "/api/me": { "get": { "summary": "Me" } },
+    "/api/portal/admin/events": { "get": { "summary": "Admin Events" } },
+    "/api/portal/{full_path}": {
+      "get": { "summary": "Portal Routes" },
+      "post": { "summary": "Portal Routes" },
+      "put": { "summary": "Portal Routes" },
+      "patch": { "summary": "Portal Routes" },
+      "delete": { "summary": "Portal Routes" }
+    }
+  }
+}

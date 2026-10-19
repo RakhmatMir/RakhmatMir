@@ -1,0 +1,10 @@
+{
+  "install": "cd school-portal/server && npm install",
+  "start": "cd school-portal/server && PORT=8080 npm start",
+  "terminals": [
+    {
+      "name": "school-portal",
+      "command": "cd school-portal/server && PORT=8080 npm start"
+    }
+  ]
+}
