@@ -168,7 +168,6 @@ function renderAuth(options = {}) {
 
   $app.innerHTML = `
     <div class="auth-screen">
-      <div class="auth-chevrons">${">".repeat(7)}</div>
       <div class="auth-left">
         <div class="auth-logo-wrap">${logoImg("hero")}</div>
         <h1>LAVH TEST</h1>
