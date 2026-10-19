@@ -1,4 +1,4 @@
-import { findRegisteredUser, registerPublicUser } from "./auth-local.js";
+import { findRegisteredUser, getRegisteredByLogin, registerPublicUser } from "./auth-local.js";
 import { dataApi, demoAuthApi, loadPortalBundle } from "./portal-data.js";
 
 const $app = document.getElementById("app");
@@ -65,6 +65,53 @@ function roleLabel() {
   if (state.uiMode === "admin") return "Администратор";
   if (state.uiMode === "teacher") return "Учитель";
   return "Ученик";
+}
+
+function displayName(user) {
+  const name = String(user?.full_name || "").trim();
+  if (name) return name;
+  return String(user?.login || "Пользователь").trim();
+}
+
+function avatarStorageKey(userId) {
+  return `lavh_avatar_${userId}`;
+}
+
+function getAvatarUrl(userId) {
+  try {
+    return localStorage.getItem(avatarStorageKey(userId)) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setAvatarUrl(userId, dataUrl) {
+  if (!dataUrl) localStorage.removeItem(avatarStorageKey(userId));
+  else localStorage.setItem(avatarStorageKey(userId), dataUrl);
+}
+
+function userInitials(user) {
+  const n = displayName(user);
+  const parts = n.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return n.slice(0, 2).toUpperCase();
+}
+
+function sidebarUserBlock(user) {
+  const name = displayName(user);
+  const avatarUrl = getAvatarUrl(user?.id);
+  const avatarInner = avatarUrl
+    ? `<img class="sidebar-user-avatar-img" src="${avatarUrl}" alt="" />`
+    : `<span class="sidebar-user-initials" aria-hidden="true">${escapeHtml(userInitials(user))}</span>`;
+  const active = state.view === "profile" ? " is-active" : "";
+  return `
+    <button type="button" class="sidebar-user${active}" id="sidebar-user-btn" aria-label="Профиль: ${escapeHtml(name)}">
+      <span class="sidebar-user-role">${escapeHtml(roleLabel())}</span>
+      <span class="sidebar-user-card">
+        <span class="sidebar-user-avatar">${avatarInner}</span>
+        <span class="sidebar-user-name">${escapeHtml(name)}</span>
+      </span>
+    </button>`;
 }
 
 function navItems() {
@@ -257,7 +304,67 @@ async function renderMainContent() {
   if (v === "errors") return renderErrorsAgg();
   if (v === "admin-home") return renderAdminHome();
   if (v === "classes") return renderAdminClasses();
+  if (v === "profile") return renderProfile();
   return `<p class="muted">Раздел в разработке</p>`;
+}
+
+function renderProfile() {
+  const user = state.session?.user;
+  if (!user) return "";
+  const reg = getRegisteredByLogin(user.login);
+  const avatarUrl = getAvatarUrl(user.id);
+  const accountKind =
+    state.userKind === "public" ? "Свободный доступ (регистрация)" : "Школа / демо-портал";
+  const rows = [
+    ["Имя", displayName(user)],
+    ["Логин", user.login],
+    ["Роль", roleLabel()],
+    ["Класс", user.class_name || "—"],
+    ["Школа", state.session?.school_name || "—"],
+    ["Тип аккаунта", accountKind],
+  ];
+  if (reg?.telegram) rows.push(["Telegram", reg.telegram]);
+  if (reg?.created_at) {
+    rows.push(["Регистрация", new Date(reg.created_at).toLocaleDateString("ru-RU")]);
+  }
+
+  const avatarPreview = avatarUrl
+    ? `<img class="profile-avatar-img" src="${avatarUrl}" alt="" />`
+    : `<span class="profile-avatar-initials">${escapeHtml(userInitials(user))}</span>`;
+
+  return `
+    <div class="lavh-card profile-card">
+      <div class="profile-head">
+        <div class="profile-avatar-wrap">${avatarPreview}</div>
+        <div>
+          <h3>${escapeHtml(displayName(user))}</h3>
+          <p class="muted">@${escapeHtml(user.login)} · ${escapeHtml(roleLabel())}</p>
+        </div>
+      </div>
+      <dl class="profile-dl">
+        ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}
+      </dl>
+      <label class="field profile-upload">
+        <span>Фото профиля (локально, до сервера)</span>
+        <input type="file" id="profile-avatar-input" accept="image/*" />
+      </label>
+    </div>`;
+}
+
+function bindProfile() {
+  const input = document.getElementById("profile-avatar-input");
+  if (!input) return;
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    const user = state.session?.user;
+    if (!file || !user) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarUrl(user.id, String(reader.result));
+      renderShell();
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function previewStripStudent() {
@@ -634,6 +741,7 @@ const VIEW_TITLES = {
   errors: ["Агрегация ошибок", "Диагностика усвоения"],
   "admin-home": ["Администратор", "Управление школой"],
   classes: ["Классы и предметы", "Редактирование структуры"],
+  profile: ["Профиль", "Ваши данные в системе"],
 };
 
 async function renderShell() {
@@ -651,7 +759,7 @@ async function renderShell() {
           <div class="logo">LAVH TEST</div>
           <small>Educational technology</small>
         </div>
-        <div class="sidebar-user">${escapeHtml(user?.full_name)} · ${roleLabel()}</div>
+        ${user ? sidebarUserBlock(user) : ""}
         ${navItems()
           .map(
             (item) =>
@@ -699,6 +807,10 @@ async function renderShell() {
     syncNavAria(false);
   });
 
+  document.getElementById("sidebar-user-btn")?.addEventListener("click", () => {
+    switchView("profile");
+  });
+
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
@@ -708,6 +820,7 @@ async function renderShell() {
   });
   bindTestList();
   bindExam();
+  bindProfile();
   document.getElementById("btn-details")?.addEventListener("click", () => alert("В полной версии — окно с ответами по каждому вопросу."));
 }
 

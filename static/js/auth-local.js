@@ -22,6 +22,11 @@ export function findRegisteredUser(login, password) {
   return readRegistry().find((u) => u.login.toLowerCase() === l && u.password === p) || null;
 }
 
+export function getRegisteredByLogin(login) {
+  const l = String(login || "").trim().toLowerCase();
+  return readRegistry().find((u) => u.login.toLowerCase() === l) || null;
+}
+
 export function registerPublicUser({ login, password, fullName, telegram }) {
   const loginNorm = String(login || "").trim().toLowerCase();
   if (!loginNorm || loginNorm.length < 3) throw new Error("login_short");
