@@ -50,6 +50,31 @@ export async function loadSchoolsIndex() {
   return schoolsIndexPromise;
 }
 
+/** Найти школу и учётку demo_users по логину и паролю (без поля «код школы» на форме). */
+export async function resolveDemoUserSchool(login, password) {
+  const loginNorm = String(login || "").trim().toLowerCase();
+  const pwd = String(password || "");
+  if (!loginNorm || !pwd) return null;
+  const idx = await loadSchoolsIndex();
+  for (const row of idx.schools || []) {
+    const schoolCode = String(row.code || "").trim().toLowerCase();
+    if (!schoolCode) continue;
+    let bundle;
+    try {
+      bundle = await loadPortalBundle({ schoolCode });
+    } catch {
+      continue;
+    }
+    const found = (bundle.demo_users || []).find(
+      (u) => String(u.login || "").trim().toLowerCase() === loginNorm && u.password === pwd
+    );
+    if (found) {
+      return { schoolCode, user: found, bundle };
+    }
+  }
+  return null;
+}
+
 export async function schoolExists(code) {
   const c = String(code || "").trim().toLowerCase();
   if (!c) return false;

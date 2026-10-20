@@ -22,6 +22,14 @@ function writeRegistry(list) {
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(list));
 }
 
+export function findRegisteredUserGlobal(login, password) {
+  const l = String(login || "").trim().toLowerCase();
+  const p = String(password || "");
+  return (
+    readRegistry().find((u) => u.login.toLowerCase() === l && u.password === p) || null
+  );
+}
+
 export function findRegisteredUser(schoolCode, login, password) {
   const school = normalizeSchoolCode(schoolCode);
   const l = String(login || "").trim().toLowerCase();
