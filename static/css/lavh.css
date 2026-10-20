@@ -106,9 +106,11 @@ body {
 }
 
 .auth-left p {
-  color: var(--lavh-muted);
+  color: #3d4659;
   max-width: 420px;
-  line-height: 1.55;
+  line-height: 1.62;
+  font-size: 1.02rem;
+  font-weight: 500;
 }
 
 .auth-column {
