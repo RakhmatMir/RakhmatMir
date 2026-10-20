@@ -768,9 +768,18 @@ body.nav-drawer-open {
     transform: translateX(-105%);
     transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 8px 0 32px rgba(0, 0, 0, 0.18);
-    overflow-x: visible;
-    overflow-y: auto;
+    overflow: visible;
     padding-top: 12px;
+  }
+
+  .sidebar-head {
+    z-index: 30;
+  }
+
+  .sidebar-nav,
+  .sidebar-dock {
+    position: relative;
+    z-index: 1;
   }
 
   .shell.nav-open .sidebar {
@@ -799,7 +808,8 @@ body.nav-drawer-open {
     box-shadow: none;
     color: #fff;
     cursor: pointer;
-    z-index: 920;
+    z-index: 40;
+    pointer-events: auto;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
   }
 
