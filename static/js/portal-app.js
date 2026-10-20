@@ -3,7 +3,7 @@ import {
   demoAuthApi,
   invalidateRemoteSubmissionsCache,
   loadPortalBundle,
-} from "./portal-data.js";
+} from "./portal-data.js?v=49";
 import {
   autoSyncSubmissionsOnLoad,
   copyLocalSubmissionsToClipboard,
@@ -604,7 +604,11 @@ function renderQuestionOptionsBlock(preview, questionIndex) {
         .filter(Boolean)
         .join(" ");
       const letter = letters[oi] || String(oi + 1);
-      return `<span class="${cls}" role="listitem">${letter}. ${escapeHtml(opt)}</span>`;
+      const note =
+        fbRow && q.correct_index !== oi && String(q.option_notes?.[oi] || "").trim()
+          ? `<span class="test-opt-why">${escapeHtml(q.option_notes[oi])}</span>`
+          : "";
+      return `<span class="${cls}" role="listitem"><span>${letter}. ${escapeHtml(opt)}</span>${note}</span>`;
     })
     .join("");
   return `<div class="student-answer-detail-inner"><p class="muted student-answer-detail-hint">Все варианты ответа</p><div class="test-demo-q-options" role="list">${opts}</div></div>`;
@@ -2231,12 +2235,27 @@ function studentStatusLabel(statusOrStudent) {
   return "Не начинал";
 }
 
+function isTeacherRole() {
+  return portalState.session?.user?.role === "teacher";
+}
+
+function teacherClassName() {
+  return String(portalState.session?.user?.class_name || "");
+}
+
 function isStaffRole() {
-  return portalState.session?.user?.role === "admin";
+  const role = portalState.session?.user?.role;
+  return role === "admin" || role === "teacher";
 }
 
 function isAdminRole() {
-  return isStaffRole();
+  return portalState.session?.user?.role === "admin" && !portalState.teacherUiMode;
+}
+
+function canManageClassRoster(className) {
+  if (canManageSchool()) return true;
+  const own = teacherClassName();
+  return isTeacherRole() && Boolean(own) && own === className;
 }
 
 function canManageSchool() {
@@ -2257,10 +2276,16 @@ function classLoginPrefix(className) {
   );
 }
 
-function suggestStudentLogin(className, rosterSize) {
+function suggestStudentLogin(className, rosterSize, takenLogins = []) {
   const prefix = classLoginPrefix(className);
-  const n = Math.max(1, Number(rosterSize) || 0) + 1;
-  return `${prefix}${String(n).padStart(2, "0")}`;
+  const taken = new Set((takenLogins || []).map((login) => String(login || "").toLowerCase()));
+  let n = Math.max(0, Number(rosterSize) || 0) + 1;
+  let login = `${prefix}${String(n).padStart(2, "0")}`;
+  while (taken.has(login) && n < 1000) {
+    n += 1;
+    login = `${prefix}${String(n).padStart(2, "0")}`;
+  }
+  return login;
 }
 
 function suggestStudentPassword(login) {
@@ -2280,46 +2305,170 @@ function buildStudentCredentialText({ school, className, fullName, login, passwo
   ].join("\n");
 }
 
-function renderAdminRosterListHtml(students) {
+function renderAdminRosterListHtml(students, options = {}) {
+  const canDelete = options.canDelete !== false;
+  const canCopy = options.canCopy !== false;
   if (!students.length) {
     return `<li><span class="muted">В классе пока нет учеников</span></li>`;
   }
-  const rows = students
+  const freshId = portalState.rosterAddNotice?.studentId;
+  return students
     .map((s, i) => {
       const extra = i >= ROSTER_PREVIEW_COUNT;
-      return `<li class="admin-roster-item${extra ? " admin-roster-item--extra" : ""}"${extra ? " hidden" : ""}>
+      const fresh = freshId != null && Number(s.id) === Number(freshId);
+      return `<li class="admin-roster-item${extra ? " admin-roster-item--extra" : ""}${fresh ? " admin-roster-item--fresh" : ""}">
         <span class="row-link-main">${escapeHtml(s.full_name)}</span>
-        <span class="muted">id ${s.id}</span>
+        <span class="admin-roster-meta">
+          <span class="muted">id ${s.id}</span>
+          ${
+            canCopy
+              ? `<button type="button" class="btn-ghost btn-mini admin-roster-copy" data-copy-student="${s.id}" title="Скопировать данные ученика" aria-label="Скопировать данные ученика">
+            <span aria-hidden="true">⎘</span>
+          </button>`
+              : ""
+          }
+          ${
+            canDelete
+              ? `<button type="button" class="btn-ghost btn-mini admin-row-delete" data-delete-student="${s.id}">Удалить</button>`
+              : ""
+          }
+        </span>
       </li>`;
     })
     .join("");
-  const expand =
-    students.length > ROSTER_PREVIEW_COUNT
-      ? `<button type="button" class="btn-ghost admin-roster-expand" data-count="${students.length - ROSTER_PREVIEW_COUNT}">Развернуть ещё ${students.length - ROSTER_PREVIEW_COUNT}</button>`
-      : "";
-  return `${rows}${expand ? `<li class="admin-roster-expand-wrap">${expand}</li>` : ""}`;
+}
+
+function renderAdminRosterExpandButton(students) {
+  if (students.length <= ROSTER_PREVIEW_COUNT) return "";
+  const n = students.length - ROSTER_PREVIEW_COUNT;
+  const expanded = portalState.rosterListExpanded === true;
+  const label = expanded ? "Свернуть список" : `Показать ещё ${n}`;
+  return `<button type="button" class="btn-ghost admin-roster-expand" data-expanded="${expanded ? "true" : "false"}" data-count="${n}">${label}</button>`;
+}
+
+function renderRosterAddNotice(className) {
+  const note = portalState.rosterAddNotice;
+  if (!note || note.className !== className) return "";
+  return `<p class="form-msg ok admin-roster-notice" role="status">Ученик «${escapeHtml(note.full_name)}» добавлен. Логин: <strong>${escapeHtml(note.login)}</strong> · Пароль: <strong>${escapeHtml(note.password)}</strong></p>`;
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function markCopyButton(btn, { icon = false } = {}) {
+  if (!btn || btn.classList.contains("is-copied")) return;
+  btn.classList.add("is-copied");
+  if (icon) {
+    const id = Number(btn.getAttribute("data-copy-student"));
+    if (Number.isFinite(id)) {
+      if (!portalState.copiedStudentIds) portalState.copiedStudentIds = new Set();
+      portalState.copiedStudentIds.add(id);
+    }
+    btn.innerHTML = `<span aria-hidden="true">✓</span>`;
+    btn.title = "Скопировано";
+    btn.setAttribute("aria-label", "Скопировано");
+    return;
+  }
+  portalState.studentFormCopied = true;
+  btn.innerHTML = `<span aria-hidden="true">✓</span> Скопировано`;
+}
+
+function restoreCopiedControls(main) {
+  if (portalState.studentFormCopied) {
+    const formBtn = main.querySelector("#btn-copy-student-cred");
+    if (formBtn) markCopyButton(formBtn);
+  }
+  const ids = portalState.copiedStudentIds;
+  if (!ids || !ids.size) return;
+  main.querySelectorAll("[data-copy-student]").forEach((btn) => {
+    if (ids.has(Number(btn.getAttribute("data-copy-student")))) markCopyButton(btn, { icon: true });
+  });
+}
+
+function bindAdminRosterCopy(main, className, students) {
+  const byId = new Map((students || []).map((student) => [Number(student.id), student]));
+  const school = portalState.session?.school_name || "Школа";
+  main.querySelectorAll("[data-copy-student]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const student = byId.get(Number(btn.getAttribute("data-copy-student")));
+      if (!student) return;
+      const text = buildStudentCredentialText({
+        school,
+        className,
+        fullName: student.full_name || "—",
+        login: student.login || "—",
+        password: student.password || "—",
+      });
+      const ok = await copyTextToClipboard(text);
+      if (ok) markCopyButton(btn, { icon: true });
+    });
+  });
+}
+
+function bindAdminRosterDelete(main, className) {
+  main.querySelectorAll("[data-delete-student]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = Number(btn.getAttribute("data-delete-student"));
+      const name = btn.closest(".admin-roster-item")?.querySelector(".row-link-main")?.textContent?.trim() || "ученика";
+      if (!window.confirm(`Удалить ученика «${name}» из класса ${className}?`)) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/portal/class/${encPath(className)}/students/${id}`, { method: "DELETE" });
+        if (Number(portalState.rosterAddNotice?.studentId) === id) portalState.rosterAddNotice = null;
+        await renderAdminClassSubjects(main);
+      } catch (err) {
+        btn.disabled = false;
+        window.alert(adminFormErrorMessage(err.message));
+      }
+    });
+  });
 }
 
 function bindAdminRosterExpand(main) {
   const btn = main.querySelector(".admin-roster-expand");
-  if (!btn) return;
+  const list = main.querySelector(".admin-roster-list");
+  if (!btn || !list) return;
   btn.addEventListener("click", () => {
     const expanded = btn.getAttribute("data-expanded") === "true";
-    main.querySelectorAll(".admin-roster-item--extra").forEach((el) => {
-      el.hidden = !expanded ? false : true;
-    });
     const n = btn.getAttribute("data-count");
     if (expanded) {
+      list.classList.remove("is-expanded");
       btn.setAttribute("data-expanded", "false");
-      btn.textContent = `Развернуть ещё ${n}`;
+      btn.textContent = `Показать ещё ${n}`;
+      portalState.rosterListExpanded = false;
     } else {
+      list.classList.add("is-expanded");
       btn.setAttribute("data-expanded", "true");
       btn.textContent = "Свернуть список";
+      portalState.rosterListExpanded = true;
     }
   });
 }
 
-function bindAdminStudentCredentialTools(main, className, rosterSize) {
+function bindAdminStudentCredentialTools(main, className, rosterSize, takenLogins = []) {
   const form = main.querySelector("#form-add-student");
   if (!form) return;
   const loginInput = form.querySelector('[name="login"]');
@@ -2327,6 +2476,11 @@ function bindAdminStudentCredentialTools(main, className, rosterSize) {
   const nameInput = form.querySelector('[name="full_name"]');
   const preview = form.querySelector(".admin-credential-preview");
   const school = portalState.session?.school_name || "Школа";
+  const suggestedLogin = suggestStudentLogin(className, rosterSize, takenLogins);
+  if (loginInput && !String(loginInput.value || "").trim()) loginInput.value = suggestedLogin;
+  if (passwordInput && !String(passwordInput.value || "").trim()) {
+    passwordInput.value = suggestStudentPassword(loginInput?.value || suggestedLogin);
+  }
 
   const syncPreview = () => {
     const fullName = String(nameInput?.value || "").trim() || "—";
@@ -2349,34 +2503,35 @@ function bindAdminStudentCredentialTools(main, className, rosterSize) {
   syncPreview();
 
   form.querySelector("#btn-gen-student-login")?.addEventListener("click", () => {
-    if (loginInput) loginInput.value = suggestStudentLogin(className, rosterSize);
+    if (loginInput) loginInput.value = suggestStudentLogin(className, rosterSize, takenLogins);
+    if (passwordInput && !String(passwordInput.value || "").trim()) {
+      passwordInput.value = suggestStudentPassword(loginInput?.value);
+    }
     syncPreview();
   });
   form.querySelector("#btn-gen-student-password")?.addEventListener("click", () => {
-    const login = String(loginInput?.value || "").trim() || suggestStudentLogin(className, rosterSize);
+    const login = String(loginInput?.value || "").trim() || suggestStudentLogin(className, rosterSize, takenLogins);
     if (passwordInput) passwordInput.value = suggestStudentPassword(login);
     syncPreview();
   });
 
-  form.querySelector("#btn-copy-student-cred")?.addEventListener("click", async () => {
-    const text = syncPreview();
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* ignore */
-    }
-  });
+  const copyBtn = form.querySelector("#btn-copy-student-cred");
+  const copyDefaultHtml = copyBtn?.innerHTML || "";
+  const resetCopyBtn = () => {
+    if (!copyBtn || portalState.restoringStudentDraft) return;
+    portalState.studentFormCopied = false;
+    copyBtn.classList.remove("is-copied");
+    copyBtn.innerHTML = copyDefaultHtml;
+  };
+  nameInput?.addEventListener("input", resetCopyBtn);
+  loginInput?.addEventListener("input", resetCopyBtn);
+  passwordInput?.addEventListener("input", resetCopyBtn);
+  form.querySelector("#btn-gen-student-login")?.addEventListener("click", resetCopyBtn);
+  form.querySelector("#btn-gen-student-password")?.addEventListener("click", resetCopyBtn);
 
-  form.querySelector("#btn-download-student-cred")?.addEventListener("click", () => {
-    const text = syncPreview();
-    const login = String(loginInput?.value || "student").trim() || "student";
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ученик-${login}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  copyBtn?.addEventListener("click", async () => {
+    const ok = await copyTextToClipboard(syncPreview());
+    if (ok) markCopyButton(copyBtn);
   });
 }
 
@@ -2387,8 +2542,82 @@ function adminFormErrorMessage(code) {
     student_invalid: "ФИО и логин (мин. 3 символа) обязательны.",
     login_taken: "Этот логин уже занят.",
     class_not_found: "Класс не найден.",
+    student_not_found: "Ученик не найден.",
+    exam_invalid: "Укажите название и хотя бы один вопрос с двумя вариантами.",
+    subject_not_found: "Предмет не найден.",
+    forbidden: "Недостаточно прав для этого класса.",
+    teachers_only: "Тесты создаёт и отправляет ученикам учитель.",
+    teacher_invalid: "Укажите ФИО, логин (от 3 символов) и пароль (от 4 символов).",
+    teacher_not_found: "Учитель не найден.",
   };
   return map[code] || "Не удалось сохранить. Попробуйте ещё раз.";
+}
+
+function classFormIsBeingEdited(main) {
+  const form = main?.querySelector?.("#form-add-class");
+  if (!form) return false;
+  const active = document.activeElement;
+  if (active && form.contains(active) && active.matches("input, textarea")) return true;
+  return String(form.querySelector('[name="class_name"]')?.value || "").trim().length > 0;
+}
+
+function readClassFormDraft(main) {
+  const form = main?.querySelector?.("#form-add-class");
+  if (!form) return null;
+  const input = form.querySelector('[name="class_name"]');
+  const active = document.activeElement;
+  return {
+    class_name: input?.value ?? "",
+    focus: active === input,
+    selectionStart: input && typeof input.selectionStart === "number" ? input.selectionStart : null,
+    selectionEnd: input && typeof input.selectionEnd === "number" ? input.selectionEnd : null,
+  };
+}
+
+function restoreClassFormDraft(main) {
+  const draft = portalState.classFormDraft;
+  if (!draft) return;
+  const input = main.querySelector('#form-add-class [name="class_name"]');
+  if (!input) return;
+  input.value = draft.class_name;
+  if (!draft.focus) return;
+  input.focus();
+  if (draft.selectionStart == null || typeof input.setSelectionRange !== "function") return;
+  try {
+    input.setSelectionRange(draft.selectionStart, draft.selectionEnd ?? draft.selectionStart);
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderClassAddNotice() {
+  const name = portalState.classAddNotice;
+  if (!name) return "";
+  return `<p class="form-msg ok admin-roster-notice" role="status">Класс «${escapeHtml(name)}» добавлен. Откройте его в списке выше.</p>`;
+}
+
+function bindAdminClassDelete(main) {
+  main.querySelectorAll("[data-delete-class]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const className = decodeURIComponent(btn.getAttribute("data-delete-class") || "");
+      if (!className) return;
+      if (!window.confirm(`Удалить класс «${className}» вместе с учениками?`)) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/portal/class/${encPath(className)}`, { method: "DELETE" });
+        if (portalState.className === className) portalState.className = null;
+        if (portalState.rosterViewClass === className) portalState.rosterViewClass = null;
+        if (portalState.classAddNotice === className) portalState.classAddNotice = null;
+        portalState.skipClassFormDraft = true;
+        await renderAdminClassesPage(main);
+      } catch (err) {
+        btn.disabled = false;
+        window.alert(adminFormErrorMessage(err.message));
+      }
+    });
+  });
 }
 
 function bindAdminAddClassForm(main) {
@@ -2403,19 +2632,19 @@ function bindAdminAddClassForm(main) {
       msg.hidden = true;
       msg.textContent = "";
     }
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
     try {
       await api("/api/portal/classes", {
         method: "POST",
         body: JSON.stringify({ class_name }),
       });
-      if (msg) {
-        msg.hidden = false;
-        msg.className = "form-msg ok";
-        msg.textContent = `Класс «${class_name}» добавлен. Откройте его в списке выше.`;
-      }
-      form.reset();
+      portalState.classAddNotice = class_name;
+      portalState.skipClassFormDraft = true;
+      portalState.classFormDraft = null;
       await renderAdminClassesPage(main);
     } catch (err) {
+      if (submitBtn) submitBtn.disabled = false;
       if (msg) {
         msg.hidden = false;
         msg.className = "form-msg err";
@@ -2425,10 +2654,60 @@ function bindAdminAddClassForm(main) {
   });
 }
 
-function bindAdminAddStudentForm(main, className, rosterSize = 0) {
+function studentFormIsBeingEdited(main) {
+  const form = main?.querySelector?.("#form-add-student");
+  if (!form) return false;
+  const active = document.activeElement;
+  if (active && form.contains(active) && active.matches("input, textarea")) return true;
+  return String(form.querySelector('[name="full_name"]')?.value || "").trim().length > 0;
+}
+
+function readStudentFormDraft(main, className) {
+  const form = main?.querySelector?.("#form-add-student");
+  if (!form) return null;
+  const active = document.activeElement;
+  const focus = active && form.contains(active) ? active.getAttribute("name") || "" : "";
+  return {
+    className,
+    full_name: form.querySelector('[name="full_name"]')?.value ?? "",
+    login: form.querySelector('[name="login"]')?.value ?? "",
+    password: form.querySelector('[name="password"]')?.value ?? "",
+    focus,
+    selectionStart: focus && active && typeof active.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: focus && active && typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+  };
+}
+
+function restoreStudentFormDraft(main, className) {
+  const draft = portalState.studentFormDraft;
+  if (!draft || draft.className !== className) return;
   const form = main.querySelector("#form-add-student");
   if (!form) return;
-  bindAdminStudentCredentialTools(main, className, rosterSize);
+  const nameInput = form.querySelector('[name="full_name"]');
+  const loginInput = form.querySelector('[name="login"]');
+  const passwordInput = form.querySelector('[name="password"]');
+  portalState.restoringStudentDraft = true;
+  if (nameInput) nameInput.value = draft.full_name;
+  if (loginInput && draft.login) loginInput.value = draft.login;
+  if (passwordInput && draft.password) passwordInput.value = draft.password;
+  nameInput?.dispatchEvent(new Event("input", { bubbles: true }));
+  portalState.restoringStudentDraft = false;
+  if (!draft.focus) return;
+  const el = form.querySelector(`[name="${draft.focus}"]`);
+  if (!el) return;
+  el.focus();
+  if (draft.selectionStart == null || typeof el.setSelectionRange !== "function") return;
+  try {
+    el.setSelectionRange(draft.selectionStart, draft.selectionEnd ?? draft.selectionStart);
+  } catch {
+    /* ignore */
+  }
+}
+
+function bindAdminAddStudentForm(main, className, rosterSize = 0, takenLogins = []) {
+  const form = main.querySelector("#form-add-student");
+  if (!form) return;
+  bindAdminStudentCredentialTools(main, className, rosterSize, takenLogins);
   const msg = form.querySelector(".form-msg");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -2442,19 +2721,26 @@ function bindAdminAddStudentForm(main, className, rosterSize = 0) {
       msg.hidden = true;
       msg.textContent = "";
     }
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
     try {
       const res = await api(`/api/portal/class/${encPath(className)}/students`, {
         method: "POST",
         body: JSON.stringify(body),
       });
-      if (msg) {
-        msg.hidden = false;
-        msg.className = "form-msg ok";
-        msg.textContent = `Ученик добавлен. Вход: ${res.login} / ${res.password}`;
-      }
-      form.reset();
+      portalState.rosterAddNotice = {
+        className,
+        studentId: res.student?.id,
+        full_name: body.full_name,
+        login: res.login,
+        password: res.password,
+      };
+      portalState.rosterListExpanded = true;
+      portalState.skipStudentFormDraft = true;
+      portalState.studentFormDraft = null;
       await renderAdminClassSubjects(main);
     } catch (err) {
+      if (submitBtn) submitBtn.disabled = false;
       if (msg) {
         msg.hidden = false;
         msg.className = "form-msg err";
@@ -2673,14 +2959,16 @@ function updateBreadcrumbs() {
 function bindRowNav(main, selector, onPick) {
   main.querySelectorAll(selector).forEach((el) => {
     const go = (e) => {
+      if (e?.target?.closest?.("button, a")) return;
       const row = e?.target?.closest?.(selector) || el;
       onPick(row);
     };
     el.addEventListener("click", go);
     el.addEventListener("keydown", (e) => {
+      if (e.target?.closest?.("button, a")) return;
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        go();
+        go(e);
       }
     });
   });
@@ -2730,26 +3018,47 @@ async function renderAdminOverviewPage(main, session) {
     ${retentionBanner}
     ${renderNotifyRecipientsPanel()}
     <div class="panel">
-      <p class="lead">${school} · выберите раздел в меню слева: классы, контрольные, статистика.</p>
+      <p class="lead">${school} · классы, ход тестов, контрольные и статистика. Тесты создают учителя.</p>
     </div>`;
   bindNotifyRecipients(main);
   updateBreadcrumbs();
 }
 
 async function renderAdminClassesPage(main) {
+  if (portalState.adminPollSilent && classFormIsBeingEdited(main)) return;
   const classes = await api("/api/portal/classes");
-  const rows = classes.length
-    ? classes
+  if (portalState.adminPollSilent && classFormIsBeingEdited(main)) return;
+  const ownClass = teacherClassName();
+  const ordered = [...classes].sort((a, b) => {
+    if (a.class_name === ownClass) return -1;
+    if (b.class_name === ownClass) return 1;
+    return 0;
+  });
+  const deleteBtn = (className) =>
+    canManageSchool()
+      ? `<button type="button" class="btn-ghost btn-mini admin-row-delete" data-delete-class="${encPath(className)}">Удалить</button>`
+      : "";
+  const accessBadge = (className) => {
+    if (!isTeacherRole()) return "";
+    if (className === ownClass) return `<span class="class-access-badge class-access-badge--own">Ваш класс</span>`;
+    return `<span class="class-access-badge">Только просмотр</span>`;
+  };
+  const rows = ordered.length
+    ? ordered
         .map(
-          (c) => `<li class="row-link is-tappable" role="button" tabindex="0" data-class-name="${encPath(c.class_name)}" title="Открыть класс">
-        <span class="row-link-main">${escapeHtml(c.class_name)}</span>
-        <span class="muted">${c.student_count} уч. · ${c.test_count} тест. · открыть →</span>
+          (c) => `<li class="row-link is-tappable${c.class_name === ownClass ? " is-own-class" : ""}" role="button" tabindex="0" data-class-name="${encPath(c.class_name)}" title="Открыть класс">
+        <span class="row-link-main">${escapeHtml(c.class_name)} ${accessBadge(c.class_name)}</span>
+        <span class="admin-class-row-actions">
+          <span class="muted">${c.student_count} уч. · ${c.test_count} тест. · открыть →</span>
+          ${deleteBtn(c.class_name)}
+        </span>
       </li>`
         )
         .join("")
     : `<li><span class="muted">Пока нет классов — добавьте первый ниже.</span></li>`;
   const addClassForm = canManageSchool()
     ? `<section class="panel admin-school-form-panel">
+      ${renderClassAddNotice()}
       <form id="form-add-class" class="admin-school-form">
         <h4>Добавить класс</h4>
         <div class="field-row">
@@ -2760,14 +3069,26 @@ async function renderAdminClassesPage(main) {
       </form>
     </section>`
     : "";
+  if (portalState.skipClassFormDraft) {
+    portalState.classFormDraft = null;
+    portalState.skipClassFormDraft = false;
+  } else {
+    portalState.classFormDraft = readClassFormDraft(main);
+  }
   main.innerHTML = `
     <div class="panel">
       <h3>Классы</h3>
-      <p class="lead muted">Строки с подсказкой «открыть →» ведут внутрь класса (предметы и ученики).</p>
+      <p class="lead muted">${
+        isTeacherRole()
+          ? "Свой класс открыт полностью. В остальных классах можно смотреть учеников и тесты, без добавления и удаления."
+          : "Строки с подсказкой «открыть →» ведут внутрь класса (предметы и ученики)."
+      }</p>
       <ul class="list-plain">${rows}</ul>
     </div>
     ${addClassForm}`;
+  restoreClassFormDraft(main);
   bindAdminAddClassForm(main);
+  bindAdminClassDelete(main);
   bindRowNav(main, "[data-class-name]", (el) => {
     portalState.staffTestsShortcut = false;
     const className = decodeURIComponent(el.getAttribute("data-class-name"));
@@ -2872,12 +3193,444 @@ async function renderAdminErrorsPage(main) {
 
 async function renderAdminTeacherOverviewPage(main, session) {
   const retentionBanner = await renderSubmissionsRetentionBanner();
+  const own = teacherClassName();
+  let classes = [];
+  try {
+    classes = await api("/api/portal/classes");
+  } catch (err) {
+    console.warn("portal: teacher classes", err);
+  }
+  const mine = classes.find((item) => item.class_name === own);
+  const others = classes.filter((item) => item.class_name !== own);
+  const otherRows = others.length
+    ? others
+        .map(
+          (item) => `<li class="row-link is-tappable" role="button" tabindex="0" data-class-name="${encPath(item.class_name)}">
+        <span class="row-link-main">${escapeHtml(item.class_name)} <span class="class-access-badge">Только просмотр</span></span>
+        <span class="muted">${item.student_count} уч. · ${item.test_count} тест.</span>
+      </li>`
+        )
+        .join("")
+    : `<li><span class="muted">Других классов пока нет.</span></li>`;
   main.innerHTML = `
     ${retentionBanner}
-    <div class="panel">
-      <p class="lead">${escapeHtml(session?.school_name || "")}</p>
-      <p class="muted">Слева: <strong>Контрольные</strong> — проверка и настройка, <strong>Статистика класса</strong> — таблица учеников, <strong>Ошибки</strong> — проблемные вопросы.</p>
-    </div>`;
+    <section class="panel teacher-own-panel">
+      <p class="class-access-badge class-access-badge--own">Ваш класс</p>
+      <h3>Класс ${escapeHtml(own || "не назначен")}</h3>
+      <p class="lead">${escapeHtml(session?.user?.subject_title || "Предмет не назначен")} · ${mine ? `${mine.student_count} учеников · ${mine.test_count} тестов` : "класс пока не привязан"}</p>
+      <p class="muted">В своём классе можно добавлять и удалять учеников. Остальные классы видны, но без полного доступа.</p>
+      <button type="button" class="btn-primary" id="btn-open-own-class"${own ? "" : " disabled"}>Открыть свой класс</button>
+    </section>
+    <section class="panel">
+      <h3>Другие классы</h3>
+      <ul class="list-plain">${otherRows}</ul>
+    </section>
+    <section class="panel">
+      <h3>Тесты</h3>
+      <p class="muted">Создайте тест, сохраните его в класс и отправьте ученикам. Результаты появятся на карточке теста.</p>
+      <button type="button" class="btn-primary" id="btn-open-create-test">Создать тест</button>
+    </section>`;
+  $("btn-open-own-class")?.addEventListener("click", () => {
+    if (!own) return;
+    if (shellNavigate("admin-class", { className: own })) return;
+    portalState.adminView = "class";
+    portalState.className = own;
+    renderAdminFlow();
+  });
+  $("btn-open-create-test")?.addEventListener("click", () => {
+    shellNavigate("create-test");
+  });
+  bindRowNav(main, "[data-class-name]", (el) => {
+    const className = decodeURIComponent(el.getAttribute("data-class-name"));
+    if (shellNavigate("admin-class", { className })) return;
+    portalState.adminView = "class";
+    portalState.className = className;
+    renderAdminFlow();
+  });
+  updateBreadcrumbs();
+}
+
+function renderExamQuestionDraft(index) {
+  const letters = ["A", "B", "C", "D"];
+  return `<fieldset class="exam-question-draft" data-question-draft>
+    <legend>Вопрос ${index + 1}</legend>
+    <label class="exam-question-text"><span>Текст</span><input name="q_text" required placeholder="Текст вопроса" /></label>
+    <p class="muted exam-question-hint">Нажмите букву верного ответа. Она загорится зелёным, остальные — красным. К неверным можно дописать, почему они неправильные.</p>
+    <input type="hidden" name="q_correct" value="0" />
+    <div class="exam-question-options">
+      ${letters
+        .map((letter, optionIndex) => {
+          const correct = optionIndex === 0;
+          return `<div class="exam-option-row${correct ? " is-correct" : " is-wrong"}" data-opt="${optionIndex}">
+        <button type="button" class="exam-option-mark" data-mark-correct="${optionIndex}" aria-label="Ответ ${letter}${correct ? ", верный" : ", неверный"}">${letter}</button>
+        <div class="exam-option-fields">
+          <input name="q_opt" required placeholder="Вариант ${letter}" />
+          <label class="exam-option-note"${correct ? " hidden" : ""}>
+            <span class="exam-option-note-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-4 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+            </span>
+            <input name="q_note" placeholder="Почему этот ответ неверный" aria-label="Почему этот ответ неверный" />
+          </label>
+        </div>
+      </div>`;
+        })
+        .join("")}
+    </div>
+  </fieldset>`;
+}
+
+function paintExamQuestionDraft(block) {
+  const correct = Number(block.querySelector('[name="q_correct"]')?.value || 0);
+  block.querySelectorAll(".exam-option-row").forEach((row) => {
+    const optionIndex = Number(row.getAttribute("data-opt"));
+    const isCorrect = optionIndex === correct;
+    row.classList.toggle("is-correct", isCorrect);
+    row.classList.toggle("is-wrong", !isCorrect);
+    const note = row.querySelector(".exam-option-note");
+    if (note) note.hidden = isCorrect;
+    const mark = row.querySelector(".exam-option-mark");
+    if (mark) {
+      const letter = mark.textContent.trim();
+      mark.setAttribute("aria-label", `Ответ ${letter}${isCorrect ? ", верный" : ", неверный"}`);
+    }
+  });
+}
+
+function bindExamQuestionDrafts(form) {
+  if (!form || form.dataset.optionMarksBound === "1") return;
+  form.dataset.optionMarksBound = "1";
+  form.addEventListener("click", (event) => {
+    const mark = event.target.closest?.("[data-mark-correct]");
+    if (!mark || !form.contains(mark)) return;
+    event.preventDefault();
+    const block = mark.closest("[data-question-draft]");
+    const input = block?.querySelector('[name="q_correct"]');
+    if (!block || !input) return;
+    input.value = mark.getAttribute("data-mark-correct") || "0";
+    paintExamQuestionDraft(block);
+  });
+}
+
+function syncExamQuestionCount(form, count) {
+  const list = form?.querySelector("#exam-question-list");
+  if (!list) return;
+  const target = Math.min(20, Math.max(1, Number(count) || 1));
+  let blocks = list.querySelectorAll("[data-question-draft]");
+  while (blocks.length < target) {
+    list.insertAdjacentHTML("beforeend", renderExamQuestionDraft(blocks.length));
+    blocks = list.querySelectorAll("[data-question-draft]");
+  }
+  while (blocks.length > target) {
+    blocks[blocks.length - 1].remove();
+    blocks = list.querySelectorAll("[data-question-draft]");
+  }
+  renumberExamQuestionDrafts(form);
+  const field = form.querySelector("#exam-question-count");
+  if (field && String(field.value) !== String(blocks.length)) field.value = String(blocks.length);
+}
+
+function renumberExamQuestionDrafts(form) {
+  form.querySelectorAll("[data-question-draft] legend").forEach((legend, index) => {
+    legend.textContent = `Вопрос ${index + 1}`;
+  });
+}
+
+function teacherSubjectCode() {
+  return String(portalState.session?.user?.subject_code || "");
+}
+
+function canTeacherSendExam(test) {
+  const user = portalState.session?.user;
+  if (!user || user.role !== "teacher" || !test?.manual_publish || test.published_to_students) return false;
+  return Number(test.created_by) === Number(user.id);
+}
+
+const TEST_FLOW_STEPS = [
+  { id: "created", label: "Создан" },
+  { id: "sent", label: "Отправлен классу" },
+  { id: "solving", label: "Класс решает" },
+  { id: "done", label: "Завершён" },
+];
+
+function examFlowStepIndex(stage) {
+  const index = TEST_FLOW_STEPS.findIndex((step) => step.id === stage);
+  return index < 0 ? 0 : index;
+}
+
+function renderTestFlowSteps(stage) {
+  const current = examFlowStepIndex(stage);
+  return `<ol class="test-flow-steps">${TEST_FLOW_STEPS.map((step, index) => {
+    const state =
+      stage === "done" || index < current ? "is-done" : index === current ? "is-current" : "is-wait";
+    return `<li class="${state}">${escapeHtml(step.label)}</li>`;
+  }).join("")}</ol>`;
+}
+
+function formatStoredTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderOwnedTestResultCard(test, students) {
+  const sent = Boolean(test.published_to_students);
+  const canSend = canTeacherSendExam(test);
+  const resultRows =
+    sent && students.length
+      ? `<table class="data-table owned-test-results">
+      <thead><tr><th>Ученик</th><th>Статус</th><th>Балл</th></tr></thead>
+      <tbody>${students
+        .map(
+          (student) =>
+            `<tr><td>${escapeHtml(student.full_name)}</td><td>${escapeHtml(studentStatusLabel(student))}</td><td>${student.score_percent != null ? `${student.score_percent}%` : "—"}</td></tr>`
+        )
+        .join("")}</tbody>
+    </table>`
+      : `<p class="muted">${sent ? "В классе пока нет учеников." : "Ученикам ещё не отправлен. После отправки здесь будут те же результаты."}</p>`;
+  return `<article class="owned-test-card">
+    <h4>${escapeHtml(test.title)}</h4>
+    <p class="muted">${escapeHtml(test.class_name)} · ${escapeHtml(test.subject_title || "")} · ${sent ? "Отправлен ученикам" : "Ждёт отправки ученикам"}</p>
+    ${resultRows}
+    ${canSend ? `<button type="button" class="btn-primary btn-mini" data-send-exam="${test.id}">Отправить ученикам</button>` : ""}
+  </article>`;
+}
+
+async function loadOwnedTestCards(className) {
+  const staff = await api("/api/portal/staff/tests");
+  const me = Number(portalState.session?.user?.id);
+  let tests = (staff.tests || []).filter((test) => test.manual_publish);
+  if (isTeacherRole()) tests = tests.filter((test) => Number(test.created_by) === me);
+  if (className) tests = tests.filter((test) => test.class_name === className);
+  const cards = [];
+  for (const test of tests) {
+    let students = [];
+    if (test.published_to_students) {
+      try {
+        const admin = await api(`/api/portal/exams/${test.id}/admin`);
+        students = admin.students || [];
+      } catch (err) {
+        console.warn("portal: test results", err);
+      }
+    }
+    cards.push({ test, students });
+  }
+  return cards;
+}
+
+function renderOwnedTestCardsHtml(cards, emptyText) {
+  if (!cards.length) return `<p class="muted">${escapeHtml(emptyText)}</p>`;
+  return cards.map((card) => renderOwnedTestResultCard(card.test, card.students)).join("");
+}
+
+function bindOwnedTestSend(main, rerender) {
+  main.querySelectorAll("[data-send-exam]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await api(`/api/portal/exams/${button.getAttribute("data-send-exam")}/send-students`, {
+          method: "POST",
+          body: "{}",
+        });
+        portalState.examCreateNotice = null;
+        await rerender();
+      } catch (err) {
+        button.disabled = false;
+        button.insertAdjacentHTML(
+          "afterend",
+          `<p class="form-msg err">${escapeHtml(adminFormErrorMessage(err.message))}</p>`
+        );
+      }
+    });
+  });
+}
+
+async function renderCreateTestPage(main) {
+  if (portalState.adminPollSilent && document.activeElement?.closest?.("#form-create-exam")) return;
+  const classes = await api("/api/portal/classes");
+  const subjectSource = classes[0];
+  const subjectData = subjectSource
+    ? await api(`/api/portal/class/${encPath(subjectSource.class_name)}/subjects`)
+    : { subjects: [] };
+  const own = teacherClassName();
+  const fixedSubject = isTeacherRole() ? teacherSubjectCode() : "";
+  const subjectTitle =
+    (subjectData.subjects || []).find((item) => item.code === fixedSubject)?.title ||
+    portalState.session?.user?.subject_title ||
+    "";
+  const classOptions = classes
+    .map(
+      (item) =>
+        `<option value="${escapeHtml(item.class_name)}"${item.class_name === own ? " selected" : ""}>${escapeHtml(item.class_name)}</option>`
+    )
+    .join("");
+  const questionCountField = `<label class="exam-question-count"><span>Вопросов</span><input id="exam-question-count" type="number" min="1" max="20" value="1" inputmode="numeric" /><button type="button" class="exam-count-check" id="btn-apply-question-count" aria-label="Применить количество вопросов">✓</button></label>`;
+  const classField = `<label class="exam-class-pick"><span>Класс</span><select name="class_name" required>${classOptions}</select></label>`;
+  const subjectField = fixedSubject
+    ? `<div class="exam-subject-line"><p class="muted">Предмет: <strong>${escapeHtml(subjectTitle || fixedSubject)}</strong></p>${questionCountField}${classField}</div><input type="hidden" name="subject_code" value="${escapeHtml(fixedSubject)}" />`
+    : `<div class="exam-subject-line"><label><span>Предмет</span><select name="subject_code" required>${(subjectData.subjects || [])
+        .map((item) => `<option value="${escapeHtml(item.code)}">${escapeHtml(item.title)}</option>`)
+        .join("")}</select></label>${questionCountField}${classField}</div>`;
+  const notice = portalState.examCreateNotice
+    ? `<p class="form-msg ok" role="status">Тест «${escapeHtml(portalState.examCreateNotice)}» сохранён. Отправьте его ученикам кнопкой на карточке.</p>`
+    : "";
+  const cards = await loadOwnedTestCards();
+  main.innerHTML = `
+    <section class="panel">
+      <h3>Создать тест</h3>
+      <p class="muted">Тест сохраняется в выбранном классе. Ученики увидят его после кнопки «Отправить ученикам».</p>
+      ${notice}
+      <form id="form-create-exam" class="admin-school-form">
+        <div class="exam-title-row">
+          <label class="exam-title-field"><span>Название</span><input name="title" required maxlength="120" placeholder="Контрольная по математике" /></label>
+          <button type="button" class="exam-pdf-btn" id="btn-add-exam-pdf" aria-label="Добавить PDF" title="Добавить PDF">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V9h5.5L13 3.5zM8 13h2.2a1.8 1.8 0 0 1 0 3.6H9.2V19H8v-6zm1.2 2.4h.9a.6.6 0 0 0 0-1.2h-.9v1.2zM12.2 13H15v1.2h-1.6V15H15v1.2h-1.6V19h-1.2v-6zM16.2 13H19v1.2h-1.6V15h1.4v1.2h-1.4V19h-1.2v-6z"/></svg>
+          </button>
+          <p class="exam-pdf-note" id="exam-pdf-note" hidden>Эта функция работает после покупки абонемента школой.</p>
+        </div>
+        <div class="field-row exam-create-picks">
+          ${subjectField}
+        </div>
+        <div id="exam-question-list">${renderExamQuestionDraft(0)}</div>
+        <button type="button" class="btn-ghost" id="btn-add-exam-question">Добавить вопрос</button>
+        <button type="submit" class="btn-primary" style="max-width:260px">Сохранить тест</button>
+        <p class="form-msg" hidden role="status"></p>
+      </form>
+    </section>
+    <section class="panel">
+      <h3>Созданные тесты</h3>
+      <p class="muted">Те же карточки, что внутри класса: кому отправлен тест и как ученики его прошли.</p>
+      ${renderOwnedTestCardsHtml(cards, "Созданных тестов пока нет.")}
+    </section>`;
+  const form = $("form-create-exam");
+  bindExamQuestionDrafts(form);
+  const applyQuestionCount = () => {
+    const raw = Number(form?.querySelector("#exam-question-count")?.value);
+    if (!form || !Number.isFinite(raw)) return;
+    syncExamQuestionCount(form, raw);
+  };
+  form?.querySelector("#btn-apply-question-count")?.addEventListener("click", applyQuestionCount);
+  form?.querySelector("#exam-question-count")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    applyQuestionCount();
+  });
+  form?.querySelector("#btn-add-exam-pdf")?.addEventListener("click", () => {
+    const note = form.querySelector("#exam-pdf-note");
+    if (note) note.hidden = false;
+  });
+  $("btn-add-exam-question")?.addEventListener("click", () => {
+    const list = $("exam-question-list");
+    if (!list || !form) return;
+    const next = list.querySelectorAll("[data-question-draft]").length + 1;
+    if (next > 20) return;
+    syncExamQuestionCount(form, next);
+  });
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const msg = form.querySelector(".form-msg");
+    const questions = [...form.querySelectorAll("[data-question-draft]")].map((block) => {
+      const correct_index = Number(block.querySelector('[name="q_correct"]')?.value || 0);
+      const notes = [...block.querySelectorAll('[name="q_note"]')].map((input) => input.value);
+      return {
+        text: block.querySelector('[name="q_text"]')?.value || "",
+        options: [...block.querySelectorAll('[name="q_opt"]')].map((input) => input.value),
+        option_notes: notes.map((note, index) => (index === correct_index ? "" : String(note || "").trim())),
+        correct_index,
+      };
+    });
+    const body = {
+      title: form.querySelector('[name="title"]')?.value || "",
+      subject_code: form.querySelector('[name="subject_code"]')?.value || "",
+      class_name: form.querySelector('[name="class_name"]')?.value || "",
+      questions,
+    };
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await api("/api/portal/exams", { method: "POST", body: JSON.stringify(body) });
+      portalState.examCreateNotice = res.exam?.title || body.title;
+      await renderCreateTestPage(main);
+    } catch (err) {
+      if (submitBtn) submitBtn.disabled = false;
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = adminFormErrorMessage(err.message);
+      }
+    }
+  });
+  bindOwnedTestSend(main, () => renderCreateTestPage(main));
+  updateBreadcrumbs();
+}
+
+async function renderAdminTestFlowPage(main) {
+  const staff = await api("/api/portal/staff/tests");
+  const tests = [...(staff.tests || [])].sort((a, b) => {
+    const rank = (stage) => (stage === "done" ? 1 : 0);
+    const byStage = rank(a.stage) - rank(b.stage);
+    if (byStage) return byStage;
+    return Number(b.id) - Number(a.id);
+  });
+  const cards = [];
+  for (const test of tests) {
+    let students = [];
+    if (test.published_to_students) {
+      try {
+        const admin = await api(`/api/portal/exams/${test.id}/admin`);
+        students = admin.students || [];
+      } catch (err) {
+        console.warn("portal: test flow", err);
+      }
+    }
+    cards.push({ test, students });
+  }
+  const body = cards.length
+    ? cards
+        .map(({ test, students }) => {
+          const sentAt = formatStoredTime(test.sent_at);
+          const createdAt = formatStoredTime(test.created_at);
+          const when = [
+            createdAt ? `создан ${createdAt}` : "",
+            sentAt ? `отправлен ${sentAt}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          const score =
+            test.avg_score_percent != null ? ` · средний балл ${test.avg_score_percent}%` : "";
+          const rows = students.length
+            ? `<table class="data-table owned-test-results">
+            <thead><tr><th>Ученик</th><th>Статус</th><th>Балл</th></tr></thead>
+            <tbody>${students
+              .map(
+                (student) =>
+                  `<tr><td>${escapeHtml(student.full_name)}</td><td>${escapeHtml(studentStatusLabel(student))}</td><td>${student.score_percent != null ? `${student.score_percent}%` : "—"}</td></tr>`
+              )
+              .join("")}</tbody>
+          </table>`
+            : "";
+          return `<article class="owned-test-card test-flow-card">
+            <h4>${escapeHtml(test.title)}</h4>
+            <p class="muted">${escapeHtml(test.created_by_name || "Школа")} · ${escapeHtml(test.class_name)} · ${escapeHtml(test.subject_title || "")} · ${test.question_count || 0} вопр.</p>
+            ${renderTestFlowSteps(test.stage)}
+            <p class="muted">Сдали ${test.submitted_count || 0} из ${test.class_total || 0}${score}${when ? ` · ${escapeHtml(when)}` : ""}</p>
+            ${rows}
+          </article>`;
+        })
+        .join("")
+    : `<p class="muted">Тестов пока нет. Когда учитель сохранит тест, он появится здесь.</p>`;
+  main.innerHTML = `
+    <section class="panel">
+      <h3>Ход тестов</h3>
+      <p class="muted">Учитель создаёт тест и отправляет его классу. Здесь видно, получил ли класс работу, кто её решил и когда тест завершён.</p>
+      ${body}
+    </section>`;
   updateBreadcrumbs();
 }
 
@@ -2888,11 +3641,108 @@ async function renderAdminShellSection(main, session) {
   else if (section === "class-stats") await renderAdminClassStatsPage(main);
   else if (section === "errors") await renderAdminErrorsPage(main);
   else if (section === "teacher-home") await renderAdminTeacherOverviewPage(main, session);
-  else await renderAdminOverviewPage(main, session);
+  else if (section === "test-flow") await renderAdminTestFlowPage(main);
+  else if (section === "create-test") {
+    if (isTeacherRole()) await renderCreateTestPage(main);
+    else await renderAdminTestFlowPage(main);
+  } else await renderAdminOverviewPage(main, session);
+}
+
+function renderAdminClassTools(className, info) {
+  const subjects = info.subjects || [];
+  const options = subjects
+    .map(
+      (subject) =>
+        `<option value="${escapeHtml(subject.code)}"${subject.code === info.teacher?.subject_code ? " selected" : ""}>${escapeHtml(subject.title)}</option>`
+    )
+    .join("");
+  const remove = info.teacher
+    ? `<button type="button" class="btn-ghost admin-row-delete" id="btn-delete-class-teacher" data-teacher-id="${info.teacher.id}">Удалить учителя</button>`
+    : "";
+  return `
+    <form id="form-rename-class" class="admin-school-form">
+      <h4>Название класса</h4>
+      <div class="field-row">
+        <label><span>Новое название</span><input name="class_name" required maxlength="12" value="${escapeHtml(className)}" /></label>
+      </div>
+      <button type="submit" class="btn-primary" style="max-width:220px">Переименовать</button>
+      <p class="form-msg" hidden role="status"></p>
+    </form>
+    <form id="form-assign-teacher" class="admin-school-form">
+      <h4>Назначить учителя</h4>
+      <div class="field-row">
+        <label><span>ФИО</span><input name="full_name" required value="${escapeHtml(info.teacher?.full_name || "")}" /></label>
+      </div>
+      <div class="field-row admin-cred-fields">
+        <label><span>Логин</span><input name="login" required minlength="3" value="${escapeHtml(info.teacher?.login || "")}" /></label>
+        <label><span>Пароль</span><input name="password" required minlength="4" placeholder="пароль" /></label>
+      </div>
+      <label><span>Предмет</span><select name="subject_code" required>${options}</select></label>
+      <button type="submit" class="btn-primary" style="max-width:240px">Назначить</button>
+      ${remove}
+      <p class="form-msg" hidden role="status"></p>
+    </form>`;
+}
+
+function bindAdminClassTools(main, className) {
+  $("form-rename-class")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const nextName = String(new FormData(form).get("class_name") || "").trim();
+    const msg = form.querySelector(".form-msg");
+    try {
+      const res = await api(`/api/portal/class/${encPath(className)}/rename`, {
+        method: "POST",
+        body: JSON.stringify({ class_name: nextName }),
+      });
+      portalState.className = res.class_name || nextName;
+      if (shellNavigate("admin-class", { className: portalState.className })) return;
+      await renderAdminClassSubjects(main);
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = adminFormErrorMessage(err.message);
+      }
+    }
+  });
+  $("form-assign-teacher")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const body = Object.fromEntries(new FormData(form).entries());
+    body.class_name = className;
+    const msg = form.querySelector(".form-msg");
+    try {
+      await api("/api/portal/teachers", { method: "POST", body: JSON.stringify(body) });
+      await renderAdminClassSubjects(main);
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = adminFormErrorMessage(err.message);
+      }
+    }
+  });
+  $("btn-delete-class-teacher")?.addEventListener("click", async () => {
+    const id = $("btn-delete-class-teacher")?.getAttribute("data-teacher-id");
+    if (!id || !window.confirm("Удалить учителя из школы?")) return;
+    try {
+      await api(`/api/portal/teachers/${id}`, { method: "DELETE" });
+      await renderAdminClassSubjects(main);
+    } catch (err) {
+      window.alert(adminFormErrorMessage(err.message));
+    }
+  });
 }
 
 async function renderAdminClassSubjects(main) {
   const cls = portalState.className;
+  if (
+    portalState.adminPollSilent &&
+    (studentFormIsBeingEdited(main) || document.activeElement?.closest?.("#form-assign-teacher, #form-rename-class"))
+  ) {
+    return;
+  }
   const data = await api(`/api/portal/class/${encPath(cls)}/subjects`);
   let classHub = "";
   if (isAdminRole()) {
@@ -2920,15 +3770,31 @@ async function renderAdminClassSubjects(main) {
   }
 
   let rosterPanel = "";
-  if (canManageSchool()) {
+  let rosterTakenLogins = [];
+  let rosterStudents = [];
+  const manageRoster = canManageClassRoster(cls);
+  if (isStaffRole()) {
     try {
       const rosterData = await api(`/api/portal/class/${encPath(cls)}/roster`);
       const students = rosterData.students || [];
-      const rosterRows = renderAdminRosterListHtml(students);
-      rosterPanel = `
-        <section class="panel">
-          <h3>Ученики класса ${escapeHtml(cls)}</h3>
-          <ul class="list-plain admin-roster-list">${rosterRows}</ul>
+      const takenLogins = rosterData.taken_logins || [];
+      rosterTakenLogins = takenLogins;
+      rosterStudents = students;
+      if (portalState.rosterViewClass !== cls) {
+        portalState.rosterViewClass = cls;
+        portalState.rosterListExpanded = false;
+        portalState.studentFormDraft = null;
+        portalState.studentFormCopied = false;
+        portalState.copiedStudentIds = new Set();
+        if (portalState.rosterAddNotice?.className !== cls) portalState.rosterAddNotice = null;
+      }
+      const rosterRows = renderAdminRosterListHtml(students, { canDelete: manageRoster, canCopy: manageRoster });
+      const rosterExpanded = portalState.rosterListExpanded === true;
+      const readonlyNote = manageRoster
+        ? ""
+        : `<p class="muted">Это не ваш класс: учеников можно только смотреть.</p>`;
+      const addForm = manageRoster
+        ? `${renderRosterAddNotice(cls)}
           <form id="form-add-student" class="admin-school-form">
             <h4>Добавить ученика</h4>
             <div class="field-row">
@@ -2937,13 +3803,13 @@ async function renderAdminClassSubjects(main) {
             <div class="field-row admin-cred-fields">
               <label class="admin-field-with-btn"><span>Логин</span>
                 <div class="admin-input-actions">
-                  <input name="login" required placeholder="6b19" minlength="3" autocomplete="off" />
+                  <input name="login" required placeholder="логин" minlength="3" autocomplete="off" />
                   <button type="button" class="btn-ghost btn-mini" id="btn-gen-student-login">Сгенерировать</button>
                 </div>
               </label>
               <label class="admin-field-with-btn"><span>Пароль</span>
                 <div class="admin-input-actions">
-                  <input name="password" placeholder="авто при сохранении" autocomplete="new-password" />
+                  <input name="password" required placeholder="пароль" minlength="4" autocomplete="new-password" />
                   <button type="button" class="btn-ghost btn-mini" id="btn-gen-student-password">Сгенерировать</button>
                 </div>
               </label>
@@ -2952,37 +3818,91 @@ async function renderAdminClassSubjects(main) {
               <button type="button" class="btn-ghost btn-mini admin-cred-tool" id="btn-copy-student-cred" title="Скопировать в буфер">
                 <span aria-hidden="true">⎘</span> Скопировать
               </button>
-              <button type="button" class="btn-ghost btn-mini admin-cred-tool" id="btn-download-student-cred" title="Скачать файлом">
-                <span aria-hidden="true">↓</span> Скачать
-              </button>
             </div>
-            <p class="muted admin-credential-format-label">Формат для ученика (так скопируется / скачается):</p>
+            <p class="muted admin-credential-format-label">Формат для ученика (так скопируется):</p>
             <pre class="admin-credential-preview" aria-live="polite"></pre>
             <button type="submit" class="btn-primary" style="max-width:240px">Добавить ученика</button>
             <p class="form-msg" hidden role="status"></p>
-          </form>
+          </form>`
+        : "";
+      rosterPanel = `
+        <section class="panel">
+          <h3>Ученики класса ${escapeHtml(cls)}</h3>
+          ${readonlyNote}
+          <ul class="list-plain admin-roster-list${rosterExpanded ? " is-expanded" : ""}">${rosterRows}</ul>
+          ${renderAdminRosterExpandButton(students)}
+          ${addForm}
         </section>`;
     } catch (err) {
       console.warn("portal: roster", err);
     }
   }
 
+  if (portalState.skipStudentFormDraft) {
+    portalState.studentFormDraft = null;
+    portalState.skipStudentFormDraft = false;
+  } else if (portalState.adminPollSilent && studentFormIsBeingEdited(main)) {
+    return;
+  } else {
+    portalState.studentFormDraft = readStudentFormDraft(main, cls);
+  }
+
+  const familiar = isTeacherRole() && !manageRoster;
+  if (familiar) classHub = "";
+  let peoplePanel = "";
+  let ownedTestsPanel = "";
+  try {
+    const info = await api(`/api/portal/class/${encPath(cls)}/info`);
+    const teacherLine = info.teacher
+      ? `${escapeHtml(info.teacher.full_name)} · ${escapeHtml(info.teacher.subject_title || "предмет не указан")}`
+      : "не назначен";
+    peoplePanel = `<section class="panel">
+      <h3>${familiar ? "Ознакомление" : "Учитель класса"}</h3>
+      ${familiar ? `<p class="muted">Чужой класс: здесь учитель, ученики и ваши тесты. Менять список нельзя.</p>` : ""}
+      <p><strong>Учитель:</strong> ${teacherLine}</p>
+      ${isAdminRole() ? renderAdminClassTools(cls, info) : ""}
+    </section>`;
+  } catch (err) {
+    console.warn("portal: class info", err);
+  }
+  if (isTeacherRole()) {
+    const cards = await loadOwnedTestCards(cls);
+    ownedTestsPanel = `<section class="panel">
+      <h3>Ваши тесты в этом классе</h3>
+      <p class="muted">Та же информация, что в разделе «Создать тест»: кому отправлен тест и как ученики его прошли.</p>
+      ${renderOwnedTestCardsHtml(cards, "В этот класс вы ещё не отправляли свои тесты.")}
+    </section>`;
+  }
+
   main.innerHTML = `
     <button type="button" class="btn-ghost btn-back" id="btn-back-classes">← К классам</button>
+    ${peoplePanel}
     ${classHub}
     ${rosterPanel}
+    ${ownedTestsPanel}
   `;
   if (isAdminRole()) {
     bindAdminTestsPanel(main, cls);
+    bindAdminClassTools(main, cls);
   }
-  if (canManageSchool()) {
+  if (isTeacherRole()) bindOwnedTestSend(main, () => renderAdminClassSubjects(main));
+  if (manageRoster) {
     bindAdminRosterExpand(main);
+    bindAdminRosterCopy(main, cls, rosterStudents);
+    bindAdminRosterDelete(main, cls);
     const rosterCount =
       main.querySelectorAll(".admin-roster-list .admin-roster-item").length ||
       main.querySelectorAll(".admin-roster-list li.admin-roster-item").length;
-    bindAdminAddStudentForm(main, cls, rosterCount);
+    bindAdminAddStudentForm(main, cls, rosterCount, rosterTakenLogins);
+    restoreStudentFormDraft(main, cls);
+    restoreCopiedControls(main);
   }
   $("btn-back-classes").addEventListener("click", () => {
+    portalState.rosterViewClass = null;
+    portalState.rosterListExpanded = false;
+    portalState.rosterAddNotice = null;
+    portalState.studentFormDraft = null;
+    portalState.skipStudentFormDraft = false;
     if (shellNavigate("classes")) return;
     portalState.adminView = "home";
     portalState.shellView = "classes";
@@ -3020,12 +3940,21 @@ async function renderAdminSubjectTests(main) {
   }
   const rows = data.tests.length
     ? data.tests
-        .map(
-          (t) => `<li class="row-link" role="button" tabindex="0" data-exam-id="${t.id}">
+        .map((t) => {
+          const canSend = canTeacherSendExam(t);
+          const status = t.manual_publish
+            ? t.published_to_students
+              ? " · ученикам отправлен"
+              : " · ждёт отправки ученикам"
+            : "";
+          return `<li class="row-link" role="button" tabindex="0" data-exam-id="${t.id}">
         <span class="row-link-main">${escapeHtml(t.control_date || "")} · ${escapeHtml(t.title)}</span>
-        <span class="muted">${escapeHtml(testListMeta(t))}</span>
-      </li>`
-        )
+        <span class="admin-class-row-actions">
+          <span class="muted">${escapeHtml(testListMeta(t))}${escapeHtml(status)}</span>
+          ${canSend ? `<button type="button" class="btn-primary btn-mini" data-send-exam="${t.id}">Отправить ученикам</button>` : ""}
+        </span>
+      </li>`;
+        })
         .join("")
     : `<li><span class="muted">В этом предмете пока нет контрольных</span></li>`;
 
@@ -3062,6 +3991,25 @@ async function renderAdminSubjectTests(main) {
     portalState.adminView = "exam";
     if (shellNavigate("admin-exam", { className: cls, subjectCode: code, examId })) return;
     renderAdminFlow();
+  });
+  main.querySelectorAll("[data-send-exam]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await api(`/api/portal/exams/${button.getAttribute("data-send-exam")}/send-students`, {
+          method: "POST",
+          body: "{}",
+        });
+        portalState.suppressSingleExamAutoload = true;
+        await renderAdminSubjectTests(main);
+      } catch (err) {
+        button.disabled = false;
+        button.insertAdjacentHTML(
+          "afterend",
+          `<p class="form-msg err">${escapeHtml(adminFormErrorMessage(err.message))}</p>`
+        );
+      }
+    });
   });
   updateBreadcrumbs();
 }
@@ -3317,14 +4265,43 @@ function renderStudentExamBundlePanel(bundle) {
   </section>`;
 }
 
+function renderExtraStudentTests(bundle) {
+  const extra = bundle?.extra_tests || [];
+  if (!extra.length) return "";
+  const rows = extra
+    .map((t) => {
+      const subject = escapeHtml(t.subject_title || "Тест");
+      const title = escapeHtml(t.title || "");
+      if (t.submitted) {
+        return `<li class="student-bundle-test is-done">
+      <span class="bundle-step-mark">✓</span>
+      <span class="row-link-main">${title || subject}</span>
+      <span class="muted">Сдан</span>
+    </li>`;
+      }
+      return `<li class="row-link student-bundle-pick" role="button" tabindex="0" data-exam-id="${t.exam_id}">
+      <span class="bundle-step-mark">→</span>
+      <span class="row-link-main">${title || subject}</span>
+      <span class="muted student-bundle-pick-meta">${subject} · ≈ ${t.duration_minutes ?? 15} мин</span>
+    </li>`;
+    })
+    .join("");
+  return `<section class="panel panel-student-bundle">
+    <h3>Новые тесты</h3>
+    <p class="muted">Учитель отправил эти тесты вашему классу.</p>
+    <ul class="list-plain bundle-steps student-bundle-tests">${rows}</ul>
+  </section>`;
+}
+
 function bindStudentExamBundlePanel(main, bundle) {
-  if (!bundle?.published) return;
   main.querySelectorAll(".student-bundle-pick[data-exam-id]").forEach((row) => {
     const openTest = async () => {
       if (blockActionIfExamActive()) return;
       const examId = Number(row.getAttribute("data-exam-id"));
       if (!Number.isFinite(examId)) return;
-      const meta = (bundle.tests || []).find((x) => x.exam_id === examId);
+      const meta =
+        (bundle?.tests || []).find((x) => x.exam_id === examId) ||
+        (bundle?.extra_tests || []).find((x) => x.exam_id === examId);
       const subject = meta?.subject_title || meta?.title || "тест";
       const mins = meta?.duration_minutes ?? bundle.minutes_per_test ?? "";
       const ok = await showStudentConfirmModal({
@@ -3649,8 +4626,26 @@ async function renderAdminExamDetail(main) {
   const sessionPanel = renderExamSessionPanel(ex, data.students);
   const teacherReportPanel = renderTeacherReportPanel(data, examId);
   const editorMeta = data.exam_editor || { published: false };
-  const teacherEditorPanel = isStaffRole()
+  const teacherEditorPanel = isAdminRole()
     ? renderTeacherExamEditorPanel(data.questions, editorMeta, { ...ex, id: examId })
+    : "";
+  const waitingForStudents = Boolean(ex.manual_publish) && !editorMeta.published;
+  const canSendStudents = canTeacherSendExam({ ...ex, published_to_students: editorMeta.published });
+  const sendStudentsPanel = ex.manual_publish
+    ? `<section class="panel">
+      <p class="lead">${
+        editorMeta.published
+          ? `Тест открыт ученикам класса ${escapeHtml(ex.class_name)}.`
+          : `Тест уже в классе ${escapeHtml(ex.class_name)}. Ученики его ещё не видят.`
+      }</p>
+      ${
+        canSendStudents
+          ? `<button type="button" class="btn-primary" id="btn-send-exam-students">Отправить ученикам</button>`
+          : waitingForStudents
+            ? `<p class="muted">Ученикам этот тест отправляет учитель, который его создал.</p>`
+            : ""
+      }
+    </section>`
     : "";
 
   main.innerHTML = `
@@ -3661,6 +4656,7 @@ async function renderAdminExamDetail(main) {
       ${renderMetricColumns(headerColumns)}
     </div>
     ${teacherEditorPanel}
+    ${sendStudentsPanel}
     ${teacherReportPanel}
     ${sessionPanel}
     ${studentPreviewPanel}
@@ -3672,9 +4668,25 @@ async function renderAdminExamDetail(main) {
   bindStudentTableExpand(main);
   bindTeacherStudentTableRows(main, examId);
   bindExamSessionPanel(main, examId, data.students);
-  if (isStaffRole()) {
+  if (isAdminRole()) {
     bindTeacherExamEditor(main, examId, { ...ex, id: examId }, data.questions, editorMeta);
   }
+  $("btn-send-exam-students")?.addEventListener("click", async () => {
+    const button = $("btn-send-exam-students");
+    if (button) button.disabled = true;
+    try {
+      await api(`/api/portal/exams/${examId}/send-students`, { method: "POST", body: "{}" });
+      await renderAdminExamDetail(main);
+    } catch (err) {
+      if (button) {
+        button.disabled = false;
+        button.insertAdjacentHTML(
+          "afterend",
+          `<p class="form-msg err">${escapeHtml(adminFormErrorMessage(err.message))}</p>`
+        );
+      }
+    }
+  });
   bindTeacherReportPanel(main, examId);
   const backTestsBtn = $("btn-back-tests");
   if (backTestsBtn && portalState.staffTestsShortcut) {
@@ -3825,6 +4837,7 @@ async function renderAdminFlow() {
     } else {
       updateBreadcrumbs();
     }
+    window.__lavhSavePage?.();
   } catch (err) {
     main.innerHTML = `<p class="error">Не удалось загрузить данные. Обновите страницу (Ctrl+F5) или перезапустите сайт: ./run.sh</p>`;
     updateBreadcrumbs();
@@ -3893,7 +4906,7 @@ async function renderStudentFlow() {
 
     let body = syncNote;
     if (section === "tests") {
-      body = `${syncNote}${renderStudentExamBundlePanel(bundle)}`;
+      body = `${syncNote}${renderStudentExamBundlePanel(bundle)}${renderExtraStudentTests(bundle)}`;
     } else if (section === "results") {
       body = `${syncNote}${renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore)}`;
     } else if (section === "progress") {
@@ -3911,6 +4924,7 @@ async function renderStudentFlow() {
       portalState.highlightResultExamId = null;
     }
     updateBreadcrumbs();
+    window.__lavhSavePage?.();
     return;
   }
 
@@ -3950,6 +4964,7 @@ async function renderStudentFlow() {
       portalState.examId = null;
       renderStudentFlow();
     });
+    window.__lavhSavePage?.();
     bindRowNav(main, "[data-exam-id]", (el) => {
       if (blockActionIfExamActive()) return;
       if (el.getAttribute("data-exam-locked") === "1") {
@@ -3989,6 +5004,7 @@ async function renderStudentFlow() {
           portalState.adminView = "subject";
           renderStudentFlow();
         });
+        window.__lavhSavePage?.();
         return;
       }
       main.innerHTML = `
@@ -4001,24 +5017,31 @@ async function renderStudentFlow() {
       });
       updateBreadcrumbs();
     }
+    window.__lavhSavePage?.();
   }
 }
 
 async function renderDashboard(session) {
   portalState.session = session;
+  const keepPage = portalState.keepRestoredPage === true;
+  portalState.keepRestoredPage = false;
   if (!portalState.shellView) {
     portalState.shellView = session.user?.role === "student" ? "home" : "admin-home";
   }
-  portalState.adminView = "home";
-  portalState.className = session.user.class_name || null;
-  portalState.subjectCode = null;
-  portalState.examId = null;
-  portalState.examTitle = null;
-  portalState.subjectTitle = null;
+  if (!keepPage) {
+    portalState.adminView = "home";
+    portalState.className = session.user?.role === "student" ? session.user.class_name || null : null;
+    portalState.subjectCode = null;
+    portalState.examId = null;
+    portalState.examTitle = null;
+    portalState.subjectTitle = null;
+  } else if (session.user?.role === "student" && !portalState.className) {
+    portalState.className = session.user.class_name || null;
+  }
 
   const role = session.user?.role || "";
 
-  if (role === "admin") {
+  if (role === "admin" || role === "teacher") {
     await adminEnterWorkspace();
   } else if (role === "student") {
     stopAdminSubmissionPoll();
@@ -4116,8 +5139,35 @@ export async function lavhInitPortalRuntime() {
   }
 }
 
+function applyRestoredPortalNav(pending, fallbackView) {
+  const fields = [
+    "shellView",
+    "adminView",
+    "className",
+    "subjectCode",
+    "subjectTitle",
+    "examId",
+    "examTitle",
+    "staffTestsShortcut",
+    "studentExamReturnHome",
+    "openExamAsReview",
+  ];
+  for (const key of fields) {
+    if (pending[key] !== undefined) portalState[key] = pending[key];
+  }
+  if (!portalState.shellView) portalState.shellView = fallbackView || portalState.shellView;
+  if (portalState.examId != null && portalState.examId !== "") portalState.examId = Number(portalState.examId);
+  portalState.keepRestoredPage = true;
+}
+
 export async function lavhRenderPortalDashboard(session, initialShellView) {
-  if (initialShellView) portalState.shellView = initialShellView;
+  const pending = window.__lavhPendingPortalNav;
+  window.__lavhPendingPortalNav = null;
+  if (pending && typeof pending === "object") {
+    applyRestoredPortalNav(pending, initialShellView);
+  } else if (initialShellView) {
+    portalState.shellView = initialShellView;
+  }
   await renderDashboard(session);
 }
 

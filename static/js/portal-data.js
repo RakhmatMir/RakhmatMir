@@ -161,22 +161,47 @@ export async function loadPortalBundle(options = {}) {
 
 const SCHOOL_EDITS_KEY = "portal_school_edits_v1";
 
-function loadSchoolEdits() {
+function editsStorageKey(schoolCode) {
+  const sc = String(schoolCode || getActiveSchoolCode() || "").trim().toLowerCase();
+  return sc ? `${SCHOOL_EDITS_KEY}::${sc}` : SCHOOL_EDITS_KEY;
+}
+
+function loadSchoolEdits(schoolCode) {
   try {
-    const raw = localStorage.getItem(scopedStorageKey(SCHOOL_EDITS_KEY));
+    const raw = localStorage.getItem(editsStorageKey(schoolCode));
     const data = raw ? JSON.parse(raw) : null;
     return {
       classes: Array.isArray(data?.classes) ? data.classes : [],
       rosterAdds: data?.rosterAdds && typeof data.rosterAdds === "object" ? data.rosterAdds : {},
       demoUsers: Array.isArray(data?.demoUsers) ? data.demoUsers : [],
+      classRemoves: Array.isArray(data?.classRemoves) ? data.classRemoves.map((name) => String(name)) : [],
+      rosterRemoves: Array.isArray(data?.rosterRemoves)
+        ? data.rosterRemoves.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+        : [],
+      examAdds: Array.isArray(data?.examAdds) ? data.examAdds : [],
+      teacherRemoves: Array.isArray(data?.teacherRemoves)
+        ? data.teacherRemoves.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+        : [],
+      teacherPatches: data?.teacherPatches && typeof data.teacherPatches === "object" ? data.teacherPatches : {},
+      classRenames: Array.isArray(data?.classRenames) ? data.classRenames : [],
     };
   } catch {
-    return { classes: [], rosterAdds: {}, demoUsers: [] };
+    return {
+      classes: [],
+      rosterAdds: {},
+      demoUsers: [],
+      classRemoves: [],
+      rosterRemoves: [],
+      examAdds: [],
+      teacherRemoves: [],
+      teacherPatches: {},
+      classRenames: [],
+    };
   }
 }
 
-function saveSchoolEdits(edits) {
-  localStorage.setItem(scopedStorageKey(SCHOOL_EDITS_KEY), JSON.stringify(edits));
+function saveSchoolEdits(edits, schoolCode) {
+  localStorage.setItem(editsStorageKey(schoolCode), JSON.stringify(edits));
 }
 
 function cloneBundle(bundle) {
@@ -185,6 +210,19 @@ function cloneBundle(bundle) {
 
 function countExamsForClass(bundle, className) {
   return (bundle.exams || []).filter((ex) => ex.class_name === className).length;
+}
+
+function isKeptSchoolAccount(user) {
+  return user?.role === "admin" || user?.role === "teacher";
+}
+
+function nextExamId(bundle, edits) {
+  let max = 200;
+  for (const exam of [...(bundle.exams || []), ...(edits.examAdds || [])]) {
+    const id = Number(exam?.id);
+    if (Number.isFinite(id)) max = Math.max(max, id);
+  }
+  return max + 1;
 }
 
 function nextStudentId(bundle, edits) {
@@ -205,19 +243,55 @@ function nextStudentId(bundle, edits) {
       if (Number.isFinite(Number(row.id))) max = Math.max(max, Number(row.id));
     }
   }
+  for (const id of edits.rosterRemoves || []) {
+    if (Number.isFinite(Number(id))) max = Math.max(max, Number(id));
+  }
   return max + 1;
 }
 
-function mergeSchoolEdits(bundle) {
+function mergeSchoolEdits(bundle, schoolCode) {
   const base = cloneBundle(bundle);
-  const edits = loadSchoolEdits();
+  const edits = loadSchoolEdits(schoolCode);
   if (!base.rosters) base.rosters = {};
   if (!base.classes) base.classes = [];
   if (!base.demo_users) base.demo_users = [];
+  if (!base.class_schedules) base.class_schedules = {};
+  if (!base.exams) base.exams = [];
+
+  for (const rename of edits.classRenames || []) {
+    const from = String(rename?.from || "").trim();
+    const to = String(rename?.to || "").trim();
+    if (!from || !to || from === to) continue;
+    for (const row of base.classes) if (row.class_name === from) row.class_name = to;
+    if (base.rosters[from]) {
+      base.rosters[to] = [...(base.rosters[to] || []), ...base.rosters[from]];
+      delete base.rosters[from];
+    }
+    if (base.class_schedules[from]) {
+      base.class_schedules[to] = base.class_schedules[from];
+      delete base.class_schedules[from];
+    }
+    for (const exam of base.exams) if (exam.class_name === from) exam.class_name = to;
+    for (const user of base.demo_users) if (user.class_name === from) user.class_name = to;
+    for (const row of edits.classes || []) if (row.class_name === from) row.class_name = to;
+    if (edits.rosterAdds?.[from]) {
+      edits.rosterAdds[to] = [...(edits.rosterAdds[to] || []), ...edits.rosterAdds[from]];
+      delete edits.rosterAdds[from];
+    }
+    for (const exam of edits.examAdds || []) if (exam.class_name === from) exam.class_name = to;
+    for (const user of edits.demoUsers || []) if (user.class_name === from) user.class_name = to;
+    edits.classRemoves = (edits.classRemoves || []).map((name) => (name === from ? to : name));
+    for (const patch of Object.values(edits.teacherPatches || {})) {
+      if (patch && patch.class_name === from) patch.class_name = to;
+    }
+  }
+
+  const removedIds = new Set((edits.rosterRemoves || []).map((id) => Number(id)).filter(Number.isFinite));
+  const removedClasses = new Set((edits.classRemoves || []).map((name) => String(name)));
 
   for (const row of edits.classes) {
     const className = String(row.class_name || "").trim();
-    if (!className) continue;
+    if (!className || removedClasses.has(className)) continue;
     if (!base.classes.some((c) => c.class_name === className)) {
       base.classes.push({
         class_name: className,
@@ -233,19 +307,64 @@ function mergeSchoolEdits(bundle) {
   }
 
   for (const [className, adds] of Object.entries(edits.rosterAdds)) {
+    if (removedClasses.has(className)) continue;
     if (!base.rosters[className]) base.rosters[className] = [];
-    const existingIds = new Set(base.rosters[className].map((r) => r.id));
+    const existingIds = new Set(base.rosters[className].map((r) => Number(r.id)));
     for (const student of adds || []) {
-      if (existingIds.has(student.id)) continue;
+      const sid = Number(student.id);
+      if (removedIds.has(sid) || existingIds.has(sid)) continue;
       base.rosters[className].push(student);
-      existingIds.add(student.id);
+      existingIds.add(sid);
     }
   }
 
   for (const u of edits.demoUsers) {
+    if (removedIds.has(Number(u.id)) || removedClasses.has(u.class_name)) continue;
     if (!base.demo_users.some((x) => String(x.login).toLowerCase() === String(u.login).toLowerCase())) {
       base.demo_users.push(u);
     }
+  }
+
+  for (const [id, patch] of Object.entries(edits.teacherPatches || {})) {
+    const teacher = base.demo_users.find((user) => user.role === "teacher" && Number(user.id) === Number(id));
+    if (!teacher || !patch) continue;
+    if (patch.full_name) teacher.full_name = String(patch.full_name);
+    if (patch.password) teacher.password = String(patch.password);
+    if (patch.subject_code !== undefined) teacher.subject_code = patch.subject_code || null;
+    if (patch.subject_title !== undefined) teacher.subject_title = patch.subject_title || null;
+    if (patch.class_name !== undefined) teacher.class_name = patch.class_name || null;
+  }
+  const removedTeachers = new Set((edits.teacherRemoves || []).map((id) => Number(id)).filter(Number.isFinite));
+  if (removedTeachers.size) {
+    base.demo_users = base.demo_users.filter(
+      (user) => user.role !== "teacher" || !removedTeachers.has(Number(user.id))
+    );
+  }
+
+  if (removedIds.size) {
+    for (const className of Object.keys(base.rosters)) {
+      base.rosters[className] = (base.rosters[className] || []).filter((row) => !removedIds.has(Number(row.id)));
+    }
+    base.demo_users = base.demo_users.filter((u) => isKeptSchoolAccount(u) || !removedIds.has(Number(u.id)));
+  }
+
+  if (removedClasses.size) {
+    base.classes = base.classes.filter((c) => !removedClasses.has(c.class_name));
+    for (const name of removedClasses) delete base.rosters[name];
+    base.demo_users = base.demo_users.filter((u) => isKeptSchoolAccount(u) || !removedClasses.has(u.class_name));
+  }
+
+  if (!base.exams) base.exams = [];
+  if (!base.subjects) base.subjects = [];
+  for (const exam of edits.examAdds || []) {
+    if (!exam || exam.id == null) continue;
+    const className = String(exam.class_name || "").trim();
+    if (!className || removedClasses.has(className)) continue;
+    if (base.exams.some((row) => Number(row.id) === Number(exam.id))) continue;
+    base.exams.push(exam);
+  }
+  for (const subject of base.subjects) {
+    subject.test_count = base.exams.filter((exam) => exam.subject_code === subject.code).length;
   }
 
   for (const c of base.classes) {
@@ -258,8 +377,9 @@ function mergeSchoolEdits(bundle) {
 }
 
 export async function getMergedBundle(options = {}) {
-  const base = await loadPortalBundle(options);
-  return mergeSchoolEdits(base);
+  const schoolCode = String(options.schoolCode || getActiveSchoolCode() || "").trim().toLowerCase();
+  const base = await loadPortalBundle(schoolCode ? { ...options, schoolCode } : options);
+  return mergeSchoolEdits(base, schoolCode);
 }
 
 function loadSubmissions() {
@@ -447,7 +567,7 @@ function defaultClassExamSchedule() {
 function classExamBundleList(bundle, className) {
   const order = Object.fromEntries(BUNDLE_SUBJECT_ORDER.map((c, i) => [c, i]));
   return bundle.exams
-    .filter((e) => e.class_name === className)
+    .filter((e) => e.class_name === className && !e.manual_publish)
     .sort((a, b) => (order[a.subject_code] ?? 99) - (order[b.subject_code] ?? 99));
 }
 
@@ -657,14 +777,31 @@ function nextBundleExamIdForStudent(bundle, className, userId, submissions) {
 function normalizeExamQuestions(questions) {
   if (!Array.isArray(questions)) return [];
   return questions.map((q) => {
-    const options = (q.options || []).map((o) => String(o).trim()).filter(Boolean);
-    while (options.length < 2) options.push("");
-    const correct = Number(q.correct_index);
-    const correct_index =
-      Number.isFinite(correct) && correct >= 0 && correct < options.length ? correct : 0;
+    const rawOptions = Array.isArray(q.options) ? q.options : [];
+    const rawNotes = Array.isArray(q.option_notes) ? q.option_notes : [];
+    const wanted = Number(q.correct_index);
+    const options = [];
+    const option_notes = [];
+    let correct_index = 0;
+    rawOptions.forEach((option, index) => {
+      const text = String(option ?? "").trim();
+      if (!text) return;
+      if (index === wanted) correct_index = options.length;
+      options.push(text);
+      option_notes.push(index === wanted ? "" : String(rawNotes[index] ?? "").trim());
+    });
+    while (options.length < 2) {
+      options.push("");
+      option_notes.push("");
+    }
+    if (!Number.isFinite(wanted) || wanted < 0 || !rawOptions.some((option, index) => index === wanted && String(option ?? "").trim())) {
+      correct_index = 0;
+      option_notes[0] = "";
+    }
     return {
       text: String(q.text || "").trim(),
       options,
+      option_notes,
       correct_index,
     };
   });
@@ -677,6 +814,7 @@ function isAdminRole(role) {
 function isExamPublishedToStudents(bundle, examId) {
   const base = examById(bundle, examId);
   if (!base) return false;
+  if (base.manual_publish) return base.published_to_students === true;
   if (base.published_to_students === true) return true;
   const inBundle = classExamBundleList(bundle, base.class_name).some(
     (e) => Number(e.id) === Number(examId)
@@ -719,6 +857,27 @@ function rosterSize(bundle, className) {
   return classRoster(bundle, className).length;
 }
 
+function examAuthorName(bundle, ex) {
+  if (ex.created_by != null) {
+    const author = (bundle.demo_users || []).find((user) => Number(user.id) === Number(ex.created_by));
+    if (author?.full_name) return author.full_name;
+  }
+  const classTeacher = (bundle.demo_users || []).find(
+    (user) => user.role === "teacher" && user.class_name === ex.class_name
+  );
+  return classTeacher?.full_name || "Школа";
+}
+
+function examFlowStage(ex, published, stats) {
+  if (ex.manual_publish && !published) return "created";
+  const total = Number(stats.class_total) || 0;
+  const submitted = Number(stats.submitted_count) || 0;
+  if (total > 0 && submitted >= total) return "done";
+  if (submitted > 0) return "solving";
+  if (published) return "sent";
+  return "created";
+}
+
 function testsForClassSubject(bundle, className, subjectCode, submissions) {
   const classTotal = rosterSize(bundle, className);
   return bundle.exams
@@ -734,6 +893,9 @@ function testsForClassSubject(bundle, className, subjectCode, submissions) {
         catalog_key: ex.catalog_key,
         duration_minutes: ex.duration_minutes,
         question_count: ex.question_count,
+        created_by: ex.created_by ?? null,
+        manual_publish: Boolean(ex.manual_publish),
+        published_to_students: isExamPublishedToStudents(bundle, ex.id),
         submitted_count: stats.submitted_count,
         class_total: stats.class_total || classTotal,
         all_submitted: stats.all_submitted,
@@ -757,10 +919,16 @@ function staffTestsList(bundle, submissions) {
       kind_label: ex.kind_label,
       catalog_key: ex.catalog_key,
       question_count: ex.question_count,
+      created_by: ex.created_by ?? null,
+      created_by_name: examAuthorName(bundle, ex),
+      created_at: ex.created_at || null,
+      sent_at: ex.sent_at || null,
+      stage: examFlowStage(ex, published, stats),
       submitted_count: stats.submitted_count,
       class_total: stats.class_total || rosterSize(bundle, ex.class_name),
       all_submitted: stats.all_submitted,
       avg_score_percent: stats.avg_score_percent,
+      manual_publish: Boolean(ex.manual_publish),
       published_to_students: published,
       duration_minutes,
       requires_teacher_publish: Boolean(ex.requires_teacher_publish),
@@ -1014,6 +1182,8 @@ function publicUser(row) {
     full_name: row.full_name,
     role: row.role,
     class_name: row.class_name ?? null,
+    subject_code: row.subject_code ?? null,
+    subject_title: row.subject_title ?? null,
     staff_title: row.staff_title ?? null,
   };
 }
@@ -1058,6 +1228,10 @@ export async function demoAuthApi(path, options = {}) {
     if (session.school_code && active && session.school_code !== active) {
       throw new Error("not_authenticated");
     }
+    const fresh = (bundle.demo_users || []).find((user) => Number(user.id) === Number(session.user?.id));
+    if (!fresh) throw new Error("not_authenticated");
+    session.user = publicUser(fresh);
+    localStorage.setItem(scopedStorageKey(DEMO_SESSION_KEY), JSON.stringify(session));
     return session;
   }
 
@@ -1074,6 +1248,24 @@ function currentUser() {
   return session?.user || null;
 }
 
+function isPortalStaff(user) {
+  return Boolean(user && (user.role === "admin" || user.role === "teacher"));
+}
+
+function canManageClassRoster(user, className) {
+  if (!user || !className) return false;
+  if (user.role === "admin") return true;
+  return user.role === "teacher" && user.class_name === className;
+}
+
+function canViewExamAsStaff(user, ex) {
+  if (!user || !ex) return false;
+  if (user.role === "admin") return true;
+  if (user.role !== "teacher") return false;
+  if (ex.created_by != null && Number(ex.created_by) === Number(user.id)) return true;
+  return Boolean(user.class_name) && ex.class_name === user.class_name;
+}
+
 export async function dataApi(path, options = {}) {
   const bundle = await getMergedBundle();
   enforceClearedStudents(bundle);
@@ -1087,7 +1279,7 @@ export async function dataApi(path, options = {}) {
   }
 
   if (path === "/api/portal/classes" && method === "GET") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!isPortalStaff(user)) throw new Error("forbidden");
     return bundle.classes;
   }
 
@@ -1098,24 +1290,65 @@ export async function dataApi(path, options = {}) {
     if (!class_name) throw new Error("class_name_required");
     if (bundle.classes.some((c) => c.class_name === class_name)) throw new Error("class_exists");
     const edits = loadSchoolEdits();
-    edits.classes.push({ class_name });
+    edits.classRemoves = (edits.classRemoves || []).filter((name) => name !== class_name);
+    if (!edits.classes.some((c) => c.class_name === class_name)) edits.classes.push({ class_name });
     if (!edits.rosterAdds[class_name]) edits.rosterAdds[class_name] = [];
     saveSchoolEdits(edits);
     return { ok: true, class_name, student_count: 0, test_count: 0 };
   }
 
+  const classDeleteMatch = path.match(/^\/api\/portal\/class\/([^/]+)$/);
+  if (classDeleteMatch && method === "DELETE") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const cls = decodeURIComponent(classDeleteMatch[1]);
+    if (!bundle.classes.some((c) => c.class_name === cls)) throw new Error("class_not_found");
+    const edits = loadSchoolEdits();
+    const ids = (bundle.rosters?.[cls] || []).map((row) => Number(row.id)).filter(Number.isFinite);
+    edits.classes = (edits.classes || []).filter((c) => c.class_name !== cls);
+    delete edits.rosterAdds[cls];
+    edits.demoUsers = (edits.demoUsers || []).filter((u) => u.class_name !== cls && !ids.includes(Number(u.id)));
+    if (!edits.classRemoves.includes(cls)) edits.classRemoves.push(cls);
+    for (const id of ids) {
+      if (!edits.rosterRemoves.includes(id)) edits.rosterRemoves.push(id);
+    }
+    saveSchoolEdits(edits);
+    return { ok: true, class_name: cls };
+  }
+
   let m = path.match(/^\/api\/portal\/class\/([^/]+)\/roster$/);
   if (m && method === "GET") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!isPortalStaff(user)) throw new Error("forbidden");
     const cls = decodeURIComponent(m[1]);
     const roster = classRoster(bundle, cls);
-    return { class_name: cls, students: roster };
+    const canSeeCredentials = canManageClassRoster(user, cls);
+    const credById = new Map();
+    for (const account of bundle.demo_users || []) {
+      if (account && account.id != null) {
+        credById.set(Number(account.id), {
+          login: String(account.login || ""),
+          password: String(account.password || ""),
+        });
+      }
+    }
+    const students = roster.map((row) => {
+      const cred = credById.get(Number(row.id));
+      return {
+        ...row,
+        login: canSeeCredentials ? cred?.login || "" : "",
+        password: canSeeCredentials ? cred?.password || "" : "",
+      };
+    });
+    return {
+      class_name: cls,
+      students,
+      taken_logins: [...credById.values()].map((cred) => cred.login.toLowerCase()).filter(Boolean),
+    };
   }
 
   m = path.match(/^\/api\/portal\/class\/([^/]+)\/students$/);
   if (m && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
     const cls = decodeURIComponent(m[1]);
+    if (!canManageClassRoster(user, cls)) throw new Error("forbidden");
     if (!bundle.classes.some((c) => c.class_name === cls)) throw new Error("class_not_found");
     const body = parseBody(options);
     const full_name = String(body.full_name || "").trim();
@@ -1148,13 +1381,205 @@ export async function dataApi(path, options = {}) {
     if (!edits.rosterAdds[cls]) edits.rosterAdds[cls] = [];
     edits.rosterAdds[cls].push(rosterRow);
     edits.demoUsers.push(demoUser);
+    edits.rosterRemoves = (edits.rosterRemoves || []).filter((id) => Number(id) !== Number(rosterRow.id));
     saveSchoolEdits(edits);
     return { ok: true, student: rosterRow, login, password: pwd };
   }
 
-  if (path === "/api/portal/staff/tests" && method === "GET") {
+  m = path.match(/^\/api\/portal\/class\/([^/]+)\/students\/(\d+)$/);
+  if (m && method === "DELETE") {
+    const cls = decodeURIComponent(m[1]);
+    const id = Number(m[2]);
+    if (!canManageClassRoster(user, cls)) throw new Error("forbidden");
+    const roster = classRoster(bundle, cls);
+    if (!roster.some((row) => Number(row.id) === id)) throw new Error("student_not_found");
+    const edits = loadSchoolEdits();
+    if (edits.rosterAdds[cls]) {
+      edits.rosterAdds[cls] = edits.rosterAdds[cls].filter((row) => Number(row.id) !== id);
+    }
+    edits.demoUsers = (edits.demoUsers || []).filter((u) => Number(u.id) !== id);
+    if (!edits.rosterRemoves.includes(id)) edits.rosterRemoves.push(id);
+    saveSchoolEdits(edits);
+    return { ok: true, id };
+  }
+
+  m = path.match(/^\/api\/portal\/class\/([^/]+)\/info$/);
+  if (m && method === "GET") {
+    if (!isPortalStaff(user)) throw new Error("forbidden");
+    const cls = decodeURIComponent(m[1]);
+    if (!bundle.classes.some((item) => item.class_name === cls)) throw new Error("class_not_found");
+    const teacher =
+      (bundle.demo_users || []).find((item) => item.role === "teacher" && item.class_name === cls) || null;
+    return {
+      class_name: cls,
+      teacher: teacher
+        ? {
+            id: teacher.id,
+            full_name: teacher.full_name,
+            login: teacher.login,
+            subject_code: teacher.subject_code || null,
+            subject_title: teacher.subject_title || null,
+          }
+        : null,
+      students: classRoster(bundle, cls).map((row) => ({ id: row.id, full_name: row.full_name })),
+      subjects: bundle.subjects || [],
+    };
+  }
+
+  m = path.match(/^\/api\/portal\/class\/([^/]+)\/rename$/);
+  if (m && method === "POST") {
     if (!user || user.role !== "admin") throw new Error("forbidden");
-    return { tests: staffTestsList(bundle, submissions) };
+    const from = decodeURIComponent(m[1]);
+    const body = parseBody(options);
+    const to = String(body.class_name || "").trim();
+    if (!to) throw new Error("class_name_required");
+    if (!bundle.classes.some((item) => item.class_name === from)) throw new Error("class_not_found");
+    if (from !== to && bundle.classes.some((item) => item.class_name === to)) throw new Error("class_exists");
+    if (from === to) return { ok: true, class_name: to };
+    const edits = loadSchoolEdits();
+    if (!Array.isArray(edits.classRenames)) edits.classRenames = [];
+    edits.classRenames.push({ from, to });
+    saveSchoolEdits(edits);
+    return { ok: true, class_name: to };
+  }
+
+  if (path === "/api/portal/teachers" && method === "POST") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const body = parseBody(options);
+    const full_name = String(body.full_name || "").trim();
+    const login = String(body.login || "").trim().toLowerCase();
+    const password = String(body.password || "").trim();
+    const class_name = String(body.class_name || "").trim();
+    const subject_code = String(body.subject_code || "").trim();
+    const subject = (bundle.subjects || []).find((item) => item.code === subject_code);
+    if (!full_name || login.length < 3 || password.length < 4) throw new Error("teacher_invalid");
+    if (!bundle.classes.some((item) => item.class_name === class_name)) throw new Error("class_not_found");
+    if (!subject) throw new Error("subject_not_found");
+    const edits = loadSchoolEdits();
+    if (!edits.teacherPatches || typeof edits.teacherPatches !== "object") edits.teacherPatches = {};
+    const taken = (bundle.demo_users || []).find((item) => String(item.login).toLowerCase() === login);
+    if (taken && taken.role !== "teacher") throw new Error("login_taken");
+    for (const teacher of bundle.demo_users || []) {
+      if (teacher.role !== "teacher" || teacher.class_name !== class_name) continue;
+      if (taken && Number(teacher.id) === Number(taken.id)) continue;
+      edits.teacherPatches[String(teacher.id)] = {
+        ...(edits.teacherPatches[String(teacher.id)] || {}),
+        class_name: null,
+      };
+    }
+    if (taken) {
+      edits.teacherPatches[String(taken.id)] = {
+        ...(edits.teacherPatches[String(taken.id)] || {}),
+        full_name,
+        class_name,
+        subject_code: subject.code,
+        subject_title: subject.title,
+        password,
+      };
+      saveSchoolEdits(edits);
+      return { ok: true, id: taken.id, login, class_name };
+    }
+    const id = nextStudentId(bundle, edits);
+    edits.demoUsers.push({
+      id,
+      login,
+      password,
+      full_name,
+      role: "teacher",
+      class_name,
+      subject_code: subject.code,
+      subject_title: subject.title,
+    });
+    saveSchoolEdits(edits);
+    return { ok: true, id, login, class_name };
+  }
+
+  m = path.match(/^\/api\/portal\/teachers\/(\d+)$/);
+  if (m && method === "DELETE") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const id = Number(m[1]);
+    const teacher = (bundle.demo_users || []).find((item) => item.role === "teacher" && Number(item.id) === id);
+    if (!teacher) throw new Error("teacher_not_found");
+    const edits = loadSchoolEdits();
+    edits.demoUsers = (edits.demoUsers || []).filter((item) => Number(item.id) !== id);
+    if (!Array.isArray(edits.teacherRemoves)) edits.teacherRemoves = [];
+    if (!edits.teacherRemoves.includes(id)) edits.teacherRemoves.push(id);
+    if (edits.teacherPatches) delete edits.teacherPatches[String(id)];
+    saveSchoolEdits(edits);
+    return { ok: true, id };
+  }
+
+  if (path === "/api/portal/exams" && method === "POST") {
+    if (!user || user.role !== "teacher") throw new Error("teachers_only");
+    const body = parseBody(options);
+    const class_name = String(body.class_name || "").trim();
+    let subject_code = String(body.subject_code || "").trim();
+    if (user.role === "teacher" && user.subject_code) subject_code = user.subject_code;
+    const title = String(body.title || "").trim();
+    const subject = (bundle.subjects || []).find((item) => item.code === subject_code);
+    if (!bundle.classes.some((item) => item.class_name === class_name)) throw new Error("class_not_found");
+    if (!subject) throw new Error("subject_not_found");
+    if (title.length < 3) throw new Error("exam_invalid");
+    const questions = normalizeExamQuestions(body.questions || []).filter(
+      (question) => question.text && question.options.filter(Boolean).length >= 2
+    );
+    if (!questions.length) throw new Error("exam_invalid");
+    const edits = loadSchoolEdits();
+    if (!Array.isArray(edits.examAdds)) edits.examAdds = [];
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const exam = {
+      id: nextExamId(bundle, edits),
+      class_name,
+      subject_code,
+      subject_title: subject.title,
+      title,
+      control_date: `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}`,
+      duration_minutes: 15,
+      kind_label: "Тест",
+      phase: "active",
+      catalog_key: "todo",
+      requires_teacher_publish: true,
+      published_to_students: false,
+      manual_publish: true,
+      question_count: questions.length,
+      questions,
+      created_by: user.id,
+      created_at: now.toISOString(),
+      sent_at: null,
+    };
+    edits.examAdds.push(exam);
+    saveSchoolEdits(edits);
+    return { ok: true, exam: stripQuestions(exam) };
+  }
+
+  m = path.match(/^\/api\/portal\/exams\/(\d+)\/send-students$/);
+  if (m && method === "POST") {
+    const examId = Number(m[1]);
+    const ex = examById(bundle, examId);
+    if (!ex) throw new Error("exam_not_found");
+    if (!ex.manual_publish) throw new Error("exam_invalid");
+    const edits = loadSchoolEdits();
+    const row = (edits.examAdds || []).find((item) => Number(item.id) === examId);
+    if (!row) throw new Error("exam_not_found");
+    if (!user || user.role !== "teacher" || Number(row.created_by) !== Number(user.id)) {
+      throw new Error("teachers_only");
+    }
+    row.published_to_students = true;
+    row.sent_at = new Date().toISOString();
+    saveSchoolEdits(edits);
+    return { ok: true, id: examId, published_to_students: true, sent_at: row.sent_at };
+  }
+
+  if (path === "/api/portal/staff/tests" && method === "GET") {
+    if (!isPortalStaff(user)) throw new Error("forbidden");
+    let tests = staffTestsList(bundle, submissions);
+    if (user.role === "teacher") {
+      tests = tests.filter(
+        (test) => Number(test.created_by) === Number(user.id) || test.class_name === user.class_name
+      );
+    }
+    return { tests };
   }
 
   if (path === "/api/portal/my/subjects" && method === "GET") {
@@ -1193,7 +1618,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/class\/([^/]+)\/subjects$/);
   if (m && method === "GET") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!isPortalStaff(user)) throw new Error("forbidden");
     return { subjects: bundle.subjects, class_name: decodeURIComponent(m[1]) };
   }
 
@@ -1206,35 +1631,46 @@ export async function dataApi(path, options = {}) {
     if (!subject) throw new Error("subject_not_found");
     const tests = testsForClassSubject(bundle, cls, code, submissions);
     if (user.role === "student") {
+      const visible = [];
       for (const t of tests) {
         const published = isExamPublishedToStudents(bundle, t.id);
+        if (!published) continue;
         const sub = getSubmission(submissions, t.id, user.id);
         const released = examResultsReleased(bundle, t.id, submissions);
-        t.published_to_students = published;
-        t.locked = !published;
+        t.published_to_students = true;
+        t.locked = false;
         t.submitted = sub !== null || t.catalog_key === "done";
         t.results_released = released;
-        if (!published) t.student_label = "Ждёт публикации";
-        else if (!t.submitted) t.student_label = "К сдаче";
+        t.avg_score_percent = sub?.score_percent ?? null;
+        t.submitted_count = t.submitted ? 1 : 0;
+        t.class_total = 1;
+        t.all_submitted = Boolean(t.submitted);
+        if (!t.submitted) t.student_label = "К сдаче";
         else if (released) t.student_label = "Сдано";
         else t.student_label = "Сдано · ждём класс";
+        visible.push(t);
       }
+      return { subject_title: subject.title, tests: visible };
     }
     return { subject_title: subject.title, tests };
   }
 
   m = path.match(/^\/api\/portal\/exams\/(\d+)\/students\/(\d+)\/submission$/);
   if (m && method === "GET") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!isPortalStaff(user)) throw new Error("forbidden");
     const examId = Number(m[1]);
     const studentId = Number(m[2]);
+    const ex = examById(bundle, examId);
+    if (!ex || !canViewExamAsStaff(user, ex)) throw new Error("forbidden");
     return buildStudentSubmissionPreview(bundle, examId, studentId, submissions);
   }
 
   m = path.match(/^\/api\/portal\/exams\/(\d+)\/admin$/);
   if (m && method === "GET") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!isPortalStaff(user)) throw new Error("forbidden");
     const examId = Number(m[1]);
+    const storedExam = examById(bundle, examId);
+    if (!storedExam || !canViewExamAsStaff(user, storedExam)) throw new Error("forbidden");
     const ex = examRecord(bundle, examId, user.role);
     if (!ex) throw new Error("exam_not_found");
     const draft = getExamDraft(examId);
@@ -1348,6 +1784,20 @@ export async function dataApi(path, options = {}) {
     });
     const next_exam_id = nextBundleExamIdForStudent(bundle, cls, user.id, submissions);
     const all_submitted = ordered.length > 0 && tests.every((t) => t.submitted);
+    const extra_tests = (bundle.exams || [])
+      .filter(
+        (ex) =>
+          ex.class_name === cls &&
+          ex.manual_publish &&
+          isExamPublishedToStudents(bundle, ex.id)
+      )
+      .map((ex) => ({
+        exam_id: ex.id,
+        title: ex.title,
+        subject_title: ex.subject_title,
+        duration_minutes: resolveExamDurationMinutes(bundle, ex),
+        submitted: getSubmission(submissions, ex.id, user.id) !== null,
+      }));
     return {
       class_name: cls,
       published: timing.bundle_published,
@@ -1357,6 +1807,7 @@ export async function dataApi(path, options = {}) {
       tests,
       next_exam_id,
       all_submitted,
+      extra_tests,
     };
   }
 
@@ -1420,7 +1871,8 @@ export async function dataApi(path, options = {}) {
     const examId = Number(m[1]);
     const ex = examRecord(bundle, examId, user.role);
     if (!ex) throw new Error("exam_not_found");
-    if (user.role === "admin") {
+    if (user.role === "admin" || user.role === "teacher") {
+      if (!canViewExamAsStaff(user, examById(bundle, examId))) throw new Error("forbidden");
       return {
         exam: stripQuestions(ex),
         questions: ex.questions,

@@ -13,7 +13,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=39";
+} from "./portal-data.js?v=49";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +21,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=39";
+} from "./portal-app.js?v=57";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -69,6 +69,83 @@ const state = {
   adminNav: { className: null, subjectCode: null, examId: null },
 };
 
+const PAGE_STATE_KEY = "lavh_page_v1";
+
+function viewsForMode(uiMode) {
+  const extra = ["profile", "settings", "admin-class", "admin-subject", "admin-exam"];
+  const base = (VIEWS[uiMode] || VIEWS.student).map((item) => item.id);
+  return new Set([...base, ...extra]);
+}
+
+function defaultViewForMode(uiMode) {
+  if (uiMode === "student") return "home";
+  if (uiMode === "teacher") return "teacher-home";
+  return "admin-home";
+}
+
+function savePageState() {
+  const user = state.session?.user;
+  if (!user) return;
+  const portal = portalState || {};
+  const payload = {
+    school: state.schoolCode || state.session?.school_code || "",
+    userId: user.id,
+    uiMode: state.uiMode,
+    view: state.view,
+    adminNav: state.adminNav,
+    portal: {
+      shellView: portal.shellView || state.view,
+      adminView: portal.adminView || "home",
+      className: portal.className ?? state.adminNav?.className ?? null,
+      subjectCode: portal.subjectCode ?? state.adminNav?.subjectCode ?? null,
+      subjectTitle: portal.subjectTitle || null,
+      examId: portal.examId ?? state.adminNav?.examId ?? null,
+      examTitle: portal.examTitle || null,
+      staffTestsShortcut: Boolean(portal.staffTestsShortcut),
+      studentExamReturnHome: Boolean(portal.studentExamReturnHome),
+      openExamAsReview: Boolean(portal.openExamAsReview),
+    },
+  };
+  try {
+    sessionStorage.setItem(PAGE_STATE_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
+
+function readPageState(session) {
+  try {
+    const raw = sessionStorage.getItem(PAGE_STATE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const school = session?.school_code || state.schoolCode || "";
+    if (data.school && school && data.school !== school) return null;
+    if (data.userId != null && session?.user?.id != null && Number(data.userId) !== Number(session.user.id)) {
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function savedViewIsUsable(data, uiMode) {
+  if (!data?.view || !viewsForMode(uiMode).has(data.view)) return false;
+  const className = data.portal?.className || data.adminNav?.className;
+  const subjectCode = data.portal?.subjectCode || data.adminNav?.subjectCode;
+  const examId = data.portal?.examId ?? data.adminNav?.examId;
+  if ((data.view === "admin-class" || data.view === "admin-subject" || data.view === "admin-exam") && !className) {
+    return false;
+  }
+  if (data.view === "admin-subject" && !subjectCode) return false;
+  if (data.view === "admin-exam" && examId == null) return false;
+  if (data.portal?.adminView === "subject" && !subjectCode) return false;
+  if (data.portal?.adminView === "exam" && examId == null) return false;
+  return true;
+}
+
+window.__lavhSavePage = savePageState;
+
 window.portalState = state;
 
 const VIEWS = {
@@ -80,6 +157,8 @@ const VIEWS = {
   ],
   teacher: [
     { id: "teacher-home", label: "Обзор", icon: "◆" },
+    { id: "classes", label: "Классы", icon: "◆" },
+    { id: "create-test", label: "Создать тест", icon: "◆" },
     { id: "staff-tests", label: "Контрольные", icon: "◆" },
     { id: "class-stats", label: "Статистика класса", icon: "◆" },
     { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
@@ -87,6 +166,7 @@ const VIEWS = {
   admin: [
     { id: "admin-home", label: "Обзор", icon: "◆" },
     { id: "classes", label: "Классы", icon: "◆" },
+    { id: "test-flow", label: "Ход тестов", icon: "◆" },
     { id: "staff-tests", label: "Контрольные", icon: "◆" },
     { id: "class-stats", label: "Статистика класса", icon: "◆" },
     { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
@@ -103,8 +183,8 @@ const DEMO_ACCOUNTS = [
   {
     label: "Учитель",
     school: "foundation",
-    login: "admin",
-    password: "admin123",
+    login: "teacher",
+    password: "teacher123",
     uiMode: "teacher",
   },
   {
@@ -131,7 +211,12 @@ async function api(path, options = {}) {
 
 function roleLabel() {
   if (state.uiMode === "admin") return "Администратор";
-  if (state.uiMode === "teacher") return "Учитель";
+  if (state.uiMode === "teacher") {
+    const cls = state.session?.user?.class_name;
+    const subject = state.session?.user?.subject_title;
+    const parts = ["Учитель", subject, cls].filter(Boolean);
+    return parts.join(" · ");
+  }
   return "Ученик";
 }
 
@@ -260,6 +345,7 @@ window.__lavhShellNavigate = async (viewId, adminNav = {}) => {
     updateShellChrome();
     await refreshPortalMain();
   }
+  savePageState();
 };
 
 function setMobileNavOpen(open) {
@@ -276,6 +362,8 @@ async function switchView(id) {
     id === "class-stats" ||
     id === "errors" ||
     id === "teacher-home" ||
+    id === "create-test" ||
+    id === "test-flow" ||
     id === "home" ||
     id === "tests" ||
     id === "results" ||
@@ -291,6 +379,7 @@ async function switchView(id) {
   await new Promise((r) => setTimeout(r, 280));
   state.view = id;
   state.leaving = false;
+  savePageState();
   renderShell();
 }
 
@@ -342,9 +431,12 @@ async function login(loginVal, password, uiMode, schoolHint = null) {
   persistDemoSession(session);
   state.session = session;
   state.userKind = "school";
-  state.uiMode = uiMode || (session.user.role === "admin" ? "admin" : "student");
+  if (session.user.role === "teacher") state.uiMode = "teacher";
+  else state.uiMode = uiMode || (session.user.role === "admin" ? "admin" : "student");
   state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
+  state.adminNav = { className: null, subjectCode: null, examId: null };
   state.bundle = await loadPortalBundle({ fresh: true, schoolCode: code });
+  savePageState();
   renderShell();
 }
 
@@ -372,6 +464,7 @@ async function refreshPortalMain() {
   if (!portalDashboardBooted) {
     portalDashboardBooted = true;
     await lavhRenderPortalDashboard(state.session, state.view);
+    savePageState();
     return;
   }
 
@@ -386,6 +479,7 @@ async function refreshPortalMain() {
   } else if (role === "student") {
     await renderStudentFlow();
   }
+  savePageState();
 }
 
 function isPortalShellView() {
@@ -1284,6 +1378,8 @@ const VIEW_TITLES = {
   "admin-exam": ["Контрольная", "Статистика и вопросы"],
   classes: ["Классы", "Список классов и переход к предметам"],
   "staff-tests": ["Контрольные", "Сдача, проверка и настройка тестов"],
+  "create-test": ["Создать тест", "Тест сохраняется, ученикам его открывает учитель"],
+  "test-flow": ["Ход тестов", "Кто создал, кому отправил и как класс прошёл"],
   profile: ["Профиль", "Ваши данные в системе"],
   settings: ["Настройки", "Параметры аккаунта"],
 };
@@ -1390,12 +1486,24 @@ async function boot() {
     state.schoolCode = session.school_code || savedSchool;
     setActiveSchoolCode(state.schoolCode);
     const role = session.user.role;
-    if (state.uiMode === "teacher" && role === "admin") {
-      /* сохранённый режим учителя из демо */
+    const saved = readPageState(session);
+    if (role === "teacher") state.uiMode = "teacher";
+    else if (saved?.uiMode === "teacher" && role === "admin") state.uiMode = "teacher";
+    else state.uiMode = role === "admin" ? "admin" : "student";
+    if (saved && savedViewIsUsable(saved, state.uiMode)) {
+      state.view = saved.view;
+      state.adminNav = {
+        className: saved.adminNav?.className || saved.portal?.className || null,
+        subjectCode: saved.adminNav?.subjectCode || saved.portal?.subjectCode || null,
+        examId: saved.adminNav?.examId ?? saved.portal?.examId ?? null,
+      };
+      window.__lavhPendingPortalNav =
+        saved.view === "profile" || saved.view === "settings" ? null : saved.portal || null;
     } else {
-      state.uiMode = role === "admin" ? "admin" : "student";
+      state.view = defaultViewForMode(state.uiMode);
+      state.adminNav = { className: null, subjectCode: null, examId: null };
+      window.__lavhPendingPortalNav = null;
     }
-    state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
     state.bundle = await loadPortalBundle({ schoolCode: state.schoolCode });
     renderShell();
   } catch {
