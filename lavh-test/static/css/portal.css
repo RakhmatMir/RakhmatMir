@@ -823,6 +823,16 @@ body.exam-guard-open #exam-guard-modal .exam-guard-dialog {
   margin-bottom: 0;
 }
 
+.student-answers-combined .student-answers-table-wrap {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.student-answers-combined .test-demo {
+  margin-bottom: 0;
+}
+
 .panel-collapse .collapse-body-inner > .panel + .panel {
   margin-top: 12px;
 }
