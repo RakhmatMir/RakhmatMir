@@ -210,7 +210,7 @@ async function loadSubmissionsForApi(user) {
   const remote = await fetchRemoteSubmissionsMap();
   const local = loadSubmissions();
   if (user?.role === "admin") {
-    return { ...remote, ...local };
+    return { ...local, ...remote };
   }
   return { ...local, ...remote };
 }
@@ -616,28 +616,32 @@ function rosterSize(bundle, className) {
   return classRoster(bundle, className).length;
 }
 
-function testsForClassSubject(bundle, className, subjectCode) {
+function testsForClassSubject(bundle, className, subjectCode, submissions) {
   const classTotal = rosterSize(bundle, className);
   return bundle.exams
     .filter((ex) => ex.class_name === className && ex.subject_code === subjectCode)
-    .map((ex) => ({
-      id: ex.id,
-      title: ex.title,
-      control_date: ex.control_date,
-      kind_label: ex.kind_label,
-      phase: ex.phase,
-      catalog_key: ex.catalog_key,
-      duration_minutes: ex.duration_minutes,
-      question_count: ex.question_count,
-      submitted_count: 0,
-      class_total: classTotal,
-    }));
+    .map((ex) => {
+      const progress = examClassProgress(bundle, ex.id, submissions);
+      return {
+        id: ex.id,
+        title: ex.title,
+        control_date: ex.control_date,
+        kind_label: ex.kind_label,
+        phase: ex.phase,
+        catalog_key: ex.catalog_key,
+        duration_minutes: ex.duration_minutes,
+        question_count: ex.question_count,
+        submitted_count: progress.submittedCount,
+        class_total: progress.classTotal || classTotal,
+      };
+    });
 }
 
-function staffTestsList(bundle) {
+function staffTestsList(bundle, submissions) {
   return bundle.exams.map((ex) => {
     const published = isExamPublishedToStudents(bundle, ex.id);
     const duration_minutes = resolveExamDurationMinutes(bundle, ex);
+    const progress = examClassProgress(bundle, ex.id, submissions);
     return {
       id: ex.id,
       class_name: ex.class_name,
@@ -648,8 +652,8 @@ function staffTestsList(bundle) {
       kind_label: ex.kind_label,
       catalog_key: ex.catalog_key,
       question_count: ex.question_count,
-      submitted_count: 0,
-      class_total: rosterSize(bundle, ex.class_name),
+      submitted_count: progress.submittedCount,
+      class_total: progress.classTotal || rosterSize(bundle, ex.class_name),
       published_to_students: published,
       duration_minutes,
       requires_teacher_publish: Boolean(ex.requires_teacher_publish),
@@ -959,7 +963,7 @@ export async function dataApi(path, options = {}) {
 
   if (path === "/api/portal/staff/tests" && method === "GET") {
     if (!user || user.role !== "admin") throw new Error("forbidden");
-    return { tests: staffTestsList(bundle) };
+    return { tests: staffTestsList(bundle, submissions) };
   }
 
   if (path === "/api/portal/my/subjects" && method === "GET") {
@@ -1009,7 +1013,7 @@ export async function dataApi(path, options = {}) {
     const code = m[2];
     const subject = bundle.subjects.find((s) => s.code === code);
     if (!subject) throw new Error("subject_not_found");
-    const tests = testsForClassSubject(bundle, cls, code);
+    const tests = testsForClassSubject(bundle, cls, code, submissions);
     if (user.role === "student") {
       for (const t of tests) {
         const published = isExamPublishedToStudents(bundle, t.id);
