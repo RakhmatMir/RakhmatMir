@@ -320,8 +320,14 @@ body {
 
 .sidebar {
   --sidebar-pad-x: 18px;
-  /* Deep navy: pairs with warm gold logo (#807060) without washing out labels */
-  background: linear-gradient(180deg, #1f2f4f 0%, #273a5e 52%, #2f456c 100%);
+  /* Lighter top → deeper navy bottom (harmonizes with gold logo) */
+  background: linear-gradient(
+    180deg,
+    #4a6288 0%,
+    #3d5274 38%,
+    #2f4260 72%,
+    #1e2a42 100%
+  );
   color: #fff;
   padding: 24px var(--sidebar-pad-x);
   display: flex;
