@@ -1,5 +1,14 @@
 import { findRegisteredUser, getRegisteredByLogin, registerPublicUser } from "./auth-local.js";
-import { dataApi, demoAuthApi, loadPortalBundle } from "./portal-data.js";
+import {
+  dataApi,
+  demoAuthApi,
+  getActiveSchoolCode,
+  loadPortalBundle,
+  loadSchoolsIndex,
+  persistDemoSession,
+  schoolExists,
+  setActiveSchoolCode,
+} from "./portal-data.js";
 
 const $app = document.getElementById("app");
 
@@ -11,6 +20,7 @@ const state = {
   leaving: false,
   exam: null,
   bundle: null,
+  schoolCode: "",
 };
 
 window.portalState = state;
@@ -43,9 +53,34 @@ function logoImg(size = "md", alt = "LAVH Educational Technology") {
 }
 
 const DEMO_ACCOUNTS = [
-  { label: "Админ", login: "admin", password: "admin123", uiMode: "admin" },
-  { label: "Учитель", login: "admin", password: "admin123", uiMode: "teacher" },
-  { label: "Ученик", login: "6b01", password: "6b01-401", uiMode: "student" },
+  {
+    label: "Foundation · админ",
+    school: "foundation",
+    login: "admin",
+    password: "admin123",
+    uiMode: "admin",
+  },
+  {
+    label: "Foundation · ученик",
+    school: "foundation",
+    login: "6b01",
+    password: "6b01-401",
+    uiMode: "student",
+  },
+  {
+    label: "LAVH demo · админ",
+    school: "lavh-demo",
+    login: "admin",
+    password: "admin123",
+    uiMode: "admin",
+  },
+  {
+    label: "LAVH demo · ученик",
+    school: "lavh-demo",
+    login: "5a01",
+    password: "5a01-501",
+    uiMode: "student",
+  },
 ];
 
 function escapeHtml(s) {
@@ -146,23 +181,33 @@ async function switchView(id) {
   renderShell();
 }
 
-async function login(loginVal, password, uiMode) {
-  const registered = findRegisteredUser(loginVal, password);
+async function login(schoolCode, loginVal, password, uiMode) {
+  const code = String(schoolCode || "").trim().toLowerCase();
+  if (!code) throw new Error("school_required");
+  if (!(await schoolExists(code))) throw new Error("school_not_found");
+
+  setActiveSchoolCode(code);
+  state.schoolCode = code;
+
+  const registered = findRegisteredUser(code, loginVal, password);
   if (registered) {
+    const bundle = await loadPortalBundle({ fresh: true, schoolCode: code });
     state.session = {
       user: {
         id: registered.id,
         login: registered.login,
         full_name: registered.full_name,
         role: "student",
-        class_name: null,
+        class_name: registered.class_name ?? null,
       },
-      school_name: "LAVH TEST",
+      school_name: bundle.school_name,
+      school_code: code,
     };
+    persistDemoSession(state.session);
     state.uiMode = "student";
     state.userKind = "public";
     state.view = "home";
-    state.bundle = await loadPortalBundle({ fresh: true });
+    state.bundle = bundle;
     renderShell();
     return;
   }
@@ -171,11 +216,13 @@ async function login(loginVal, password, uiMode) {
     method: "POST",
     body: JSON.stringify({ login: loginVal, password: password }),
   });
+  session.school_code = code;
+  persistDemoSession(session);
   state.session = session;
   state.userKind = "school";
   state.uiMode = uiMode || (session.user.role === "admin" ? "admin" : "student");
   state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
-  state.bundle = await loadPortalBundle({ fresh: true });
+  state.bundle = await loadPortalBundle({ fresh: true, schoolCode: code });
   renderShell();
 }
 
@@ -191,19 +238,50 @@ const AUTH_ERRORS = {
   password_short: "Пароль не короче 6 символов",
   login_taken: "Такой логин уже занят",
   password_mismatch: "Пароли не совпадают",
+  school_required: "Укажите код школы",
+  school_not_found: "Школа не найдена. Проверьте код.",
 };
 
-function renderAuth(options = {}) {
+function authErrorMessage(err) {
+  if (err?.message === "school_required") return AUTH_ERRORS.school_required;
+  if (err?.message === "school_not_found") return AUTH_ERRORS.school_not_found;
+  return AUTH_ERRORS[err?.message] || "Неверный логин или пароль";
+}
+
+function schoolDatalistHtml(schools) {
+  const options = (schools || [])
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)} (${escapeHtml(s.code)})</option>`
+    )
+    .join("");
+  return `<datalist id="school-codes">${options}</datalist>`;
+}
+
+function schoolFieldHtml(value = "") {
+  const v = escapeHtml(value || getActiveSchoolCode() || "foundation");
+  return `
+    <label class="field">
+      <span>Код школы</span>
+      <input name="school_code" required autocomplete="organization" list="school-codes" placeholder="foundation" value="${v}" />
+    </label>`;
+}
+
+async function renderAuth(options = {}) {
   const error = typeof options === "string" ? options : options.error || "";
   const registerOk = options.registerOk || null;
   const showRegister = (options.authPanel || "login") === "register";
+  const schoolsIndex = await loadSchoolsIndex();
+  const schools = schoolsIndex.schools || [];
+  const schoolPrefill = options.schoolCode || getActiveSchoolCode() || "foundation";
 
   const loginCard = `
     <form class="auth-card auth-panel" id="login-form" ${showRegister ? 'hidden' : ""}>
-      <h2>Вход</h2>
-      <p class="sub">Администрация, школа или ваш аккаунт</p>
+      <h2>Вход в школу</h2>
+      <p class="sub">Укажите код школы, затем логин и пароль</p>
       ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите ниже.</p>` : ""}
       ${error && !showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
+      ${schoolFieldHtml(schoolPrefill)}
       <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
       <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
       <button type="submit" class="btn-primary">Войти</button>
@@ -215,8 +293,9 @@ function renderAuth(options = {}) {
   const registerCard = `
     <form class="auth-card auth-panel auth-card-register" id="register-form" ${showRegister ? "" : "hidden"}>
       <h2>Регистрация</h2>
-      <p class="sub">Свободный доступ · логин придёт в Telegram (позже)</p>
+      <p class="sub">Аккаунт в выбранной школе · Telegram позже</p>
       ${error && showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
+      ${schoolFieldHtml(schoolPrefill)}
       <label class="field"><span>Имя</span><input name="full_name" required autocomplete="name" placeholder="Как к вам обращаться" /></label>
       <label class="field"><span>Telegram</span><input name="telegram" autocomplete="username" placeholder="@username" /></label>
       <label class="field"><span>Логин</span><input name="login" required autocomplete="username" minlength="3" placeholder="латиница, цифры" /></label>
@@ -233,9 +312,10 @@ function renderAuth(options = {}) {
       <div class="auth-left">
         <div class="auth-logo-wrap">${logoImg("hero")}</div>
         <h1>LAVH TEST</h1>
-        <p>Платформа автоматизированного тестирования для школ и самостоятельной подготовки.</p>
+        <p>Платформа автоматизированного тестирования: несколько школ на одном сайте, каждая со своими учениками и тестами. Сначала ознакомьтесь с сервисом, затем войдите по коду школы.</p>
       </div>
       <div class="auth-column">
+        ${schoolDatalistHtml(schools)}
         <div class="auth-stack">
           ${loginCard}
           ${registerCard}
@@ -256,9 +336,13 @@ function renderAuth(options = {}) {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
-      await login(fd.get("login"), fd.get("password"), null);
-    } catch {
-      renderAuth({ error: "Неверный логин или пароль", authPanel: "login" });
+      await login(fd.get("school_code"), fd.get("login"), fd.get("password"), null);
+    } catch (err) {
+      renderAuth({
+        error: authErrorMessage(err),
+        authPanel: "login",
+        schoolCode: document.querySelector("#login-form [name=school_code]")?.value,
+      });
     }
   });
 
@@ -271,12 +355,17 @@ function renderAuth(options = {}) {
     }
     try {
       const user = registerPublicUser({
+        schoolCode: fd.get("school_code"),
         login: fd.get("login"),
         password: fd.get("password"),
         fullName: fd.get("full_name"),
         telegram: fd.get("telegram"),
       });
-      renderAuth({ registerOk: { login: user.login }, authPanel: "login" });
+      renderAuth({
+        registerOk: { login: user.login },
+        authPanel: "login",
+        schoolCode: user.school_code,
+      });
     } catch (err) {
       renderAuth({ error: AUTH_ERRORS[err.message] || "Не удалось зарегистрироваться", authPanel: "register" });
     }
@@ -293,7 +382,9 @@ function renderAuth(options = {}) {
     btn.addEventListener("click", () => {
       const acc = DEMO_ACCOUNTS.find((d) => d.label === btn.dataset.demo);
       if (!acc) return;
-      login(acc.login, acc.password, acc.uiMode).catch(() => renderAuth({ error: "Ошибка входа", authPanel: "login" }));
+      login(acc.school, acc.login, acc.password, acc.uiMode).catch(() =>
+        renderAuth({ error: "Ошибка входа", authPanel: "login", schoolCode: acc.school })
+      );
     });
   });
 }
@@ -345,7 +436,7 @@ function bindSettings() {
 function renderProfile() {
   const user = state.session?.user;
   if (!user) return "";
-  const reg = getRegisteredByLogin(user.login);
+  const reg = getRegisteredByLogin(state.schoolCode || state.session?.school_code, user.login);
   const avatarUrl = getAvatarUrl(user.id);
   const accountKind =
     state.userKind === "public" ? "Свободный доступ (регистрация)" : "Школа / демо-портал";
@@ -865,15 +956,28 @@ async function renderShell() {
 }
 
 async function boot() {
+  const savedSchool = getActiveSchoolCode();
+  if (!savedSchool) {
+    await renderAuth();
+    return;
+  }
+  state.schoolCode = savedSchool;
   try {
     const session = await api("/api/me");
     state.session = session;
-    state.uiMode = session.user.role === "admin" ? "admin" : "student";
-    state.view = state.uiMode === "student" ? "home" : "admin-home";
-    state.bundle = await loadPortalBundle();
+    state.schoolCode = session.school_code || savedSchool;
+    setActiveSchoolCode(state.schoolCode);
+    const role = session.user.role;
+    if (state.uiMode === "teacher" && role === "admin") {
+      /* сохранённый режим учителя из демо */
+    } else {
+      state.uiMode = role === "admin" ? "admin" : "student";
+    }
+    state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
+    state.bundle = await loadPortalBundle({ schoolCode: state.schoolCode });
     renderShell();
   } catch {
-    renderAuth();
+    await renderAuth();
   }
 }
 
