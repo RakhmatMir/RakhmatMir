@@ -296,8 +296,10 @@ async function renderAuth(options = {}) {
   $app.innerHTML = `
     <div class="auth-screen">
       <div class="auth-left">
-        <div class="auth-logo-wrap">${logoImg("hero")}</div>
-        <h1>LAVH TEST</h1>
+        <div class="auth-brand">
+          <div class="auth-logo-wrap">${logoImg("hero")}</div>
+          <h1>LAVH TEST</h1>
+        </div>
         <p>Платформа, которая облегчает работу учителей и помогает точнее контролировать успеваемость учеников — тесты, результаты и аналитика в одном месте.</p>
       </div>
       <div class="auth-column">
