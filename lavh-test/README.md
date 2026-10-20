@@ -32,6 +32,6 @@ python3 -m http.server 8080
 
 Данные и логика тестов — `portal-data.js` + полный интерфейс портала `portal-app.js` (как на рабочем сайте).
 
-Сдачи школы: `data/schools/<код>/submissions.json` (для foundation скопирован с демо-сервера; при появлении новых сдач файл можно обновить в репозитории).
+Сдачи школы: `data/schools/<код>/submissions.json` (для **foundation** выгружены с рабочего API: 18 учеников × 3 теста). Повторный экспорт — скрипт в `lavh-test/scripts/export-foundation-submissions.py`.
 
 Файл `data/portal.json` устарел; используйте `data/schools/...`.
