@@ -410,7 +410,6 @@ body.nav-drawer-open {
   padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .sidebar-user-avatar {
