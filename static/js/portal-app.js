@@ -584,9 +584,71 @@ function studentExamHeaderMetrics(ex, preview) {
   return cols;
 }
 
-function renderStudentFeedbackTable(preview, { answerColumnLabel = "Ваш ответ", showTiming = false } = {}) {
+function renderQuestionOptionsBlock(preview, questionIndex) {
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  const q = preview.questions?.[questionIndex];
+  const fbRow = preview.feedback?.[questionIndex];
+  if (!q) return "";
+  const opts = (q.options || [])
+    .map((opt, oi) => {
+      const isStudentPick = fbRow?.selected_index === oi;
+      const isStudentOk = isStudentPick && fbRow?.is_correct;
+      const isStudentBad = isStudentPick && !fbRow?.is_correct;
+      const showCorrect = isStudentBad && q.correct_index === oi;
+      const cls = [
+        "test-demo-opt",
+        isStudentOk || showCorrect ? "is-correct" : "",
+        isStudentBad ? "is-wrong" : "",
+        isStudentPick ? "is-selected" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const letter = letters[oi] || String(oi + 1);
+      return `<span class="${cls}" role="listitem">${letter}. ${escapeHtml(opt)}</span>`;
+    })
+    .join("");
+  return `<div class="student-answer-detail-inner"><p class="muted student-answer-detail-hint">Все варианты ответа</p><div class="test-demo-q-options" role="list">${opts}</div></div>`;
+}
+
+function renderStudentFeedbackTable(
+  preview,
+  { answerColumnLabel = "Ваш ответ", showTiming = false, expandableQuestions = false } = {}
+) {
   const letters = ["A", "B", "C", "D", "E", "F"];
   const rows = preview.feedback || [];
+
+  if (expandableQuestions) {
+    const colCount = showTiming ? 6 : 4;
+    const body = rows.length
+      ? rows
+          .map((row, idx) => {
+            const qText = escapeHtml(row.question || preview.questions?.[idx]?.text || "");
+            const sel = row.selected_index;
+            const q = preview.questions?.[idx];
+            const answerText =
+              sel == null || sel < 0
+                ? "—"
+                : escapeHtml(`${letters[sel] || sel + 1}. ${q?.options?.[sel] ?? ""}`);
+            const resultCell = row.is_correct
+              ? `<span class="tag tag-ok">верно</span>`
+              : `<span class="tag tag-warn">ошибка</span>`;
+            return `<tr class="student-answer-row">
+        <td class="num">${idx + 1}</td>
+        <td class="col-question"><button type="button" class="student-answer-q-toggle" data-q="${idx}" aria-expanded="false">${qText}<span class="student-answer-q-chevron" aria-hidden="true">›</span></button></td>
+        <td class="col-answer">${answerText}</td>
+        <td class="num col-result">${resultCell}</td>
+      </tr>
+      <tr class="student-answer-detail" data-for-q="${idx}" hidden>
+        <td colspan="${colCount}">${renderQuestionOptionsBlock(preview, idx)}</td>
+      </tr>`;
+          })
+          .join("")
+      : `<tr><td class="muted" colspan="${colCount}">Нет данных</td></tr>`;
+    return `<div class="table-scroll"><table class="data-table table-student-answers table-student-answers-expand"><thead><tr>
+      <th scope="col">№</th><th scope="col">Вопрос</th><th scope="col">${escapeHtml(answerColumnLabel)}</th><th scope="col">Итог</th>
+    </tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
   const columns = [
     { label: "№", cellClass: "num", render: (_, idx) => String(idx + 1) },
     {
@@ -1379,6 +1441,28 @@ function renderCollapsiblePanel({ title, hint, hintHtml, open, bodyHtml }) {
       </button>
       <div class="collapse-body"><div class="collapse-body-inner">${bodyHtml}</div></div>
     </section>`;
+}
+
+function bindStudentAnswerTableExpand(main) {
+  main.querySelectorAll(".student-answer-q-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const qi = btn.getAttribute("data-q");
+      const detail = main.querySelector(`.student-answer-detail[data-for-q="${qi}"]`);
+      const wasOpen = detail && !detail.hidden;
+      main.querySelectorAll(".student-answer-detail").forEach((row) => {
+        row.hidden = true;
+      });
+      main.querySelectorAll(".student-answer-q-toggle").forEach((b) => {
+        b.setAttribute("aria-expanded", "false");
+        b.classList.remove("is-open");
+      });
+      if (detail && !wasOpen) {
+        detail.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+        btn.classList.add("is-open");
+      }
+    });
+  });
 }
 
 function bindCollapsiblePanels(main) {
@@ -3532,7 +3616,7 @@ async function renderStudentExamPreview(main) {
   });
   const summary = showResults ? studentFeedbackSummary(reviewPreview) : null;
   const answersBody = showResults
-    ? renderStudentFeedbackTable(reviewPreview)
+    ? renderStudentFeedbackTable(reviewPreview, { expandableQuestions: true })
     : `<p class="muted">Ответы появятся после сдачи теста.</p>`;
 
   main.innerHTML = `
@@ -3555,11 +3639,12 @@ async function renderStudentExamPreview(main) {
         : null,
       open: showResults,
       bodyHtml: showResults
-        ? `<div class="student-answers-combined">${testInner}<div class="student-answers-table-wrap">${answersBody}</div></div>`
+        ? `<p class="muted test-demo-note">Нажмите на текст вопроса в таблице — откроются все варианты ответа.</p>${answersBody}`
         : testInner,
     })}
   `;
   bindCollapsiblePanels(main);
+  if (showResults) bindStudentAnswerTableExpand(main);
   bindDemoTestPicks(main);
   $("btn-student-exam-back").addEventListener("click", () => navigateBackFromStudentExam(ex));
 }
