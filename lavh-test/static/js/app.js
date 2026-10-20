@@ -1,4 +1,9 @@
-import { findRegisteredUser, getRegisteredByLogin, registerPublicUser } from "./auth-local.js";
+import {
+  findRegisteredUser,
+  findRegisteredUserGlobal,
+  getRegisteredByLogin,
+  registerPublicUser,
+} from "./auth-local.js";
 import {
   dataApi,
   demoAuthApi,
@@ -6,7 +11,7 @@ import {
   loadPortalBundle,
   loadSchoolsIndex,
   persistDemoSession,
-  schoolExists,
+  resolveDemoUserSchool,
   setActiveSchoolCode,
 } from "./portal-data.js";
 
@@ -167,10 +172,18 @@ async function switchView(id) {
   renderShell();
 }
 
-async function login(schoolCode, loginVal, password, uiMode) {
-  const code = String(schoolCode || "").trim().toLowerCase();
-  if (!code) throw new Error("school_required");
-  if (!(await schoolExists(code))) throw new Error("school_not_found");
+async function login(loginVal, password, uiMode, schoolHint = null) {
+  let code = String(schoolHint || "").trim().toLowerCase();
+  if (!code) {
+    const registeredGlobal = findRegisteredUserGlobal(loginVal, password);
+    if (registeredGlobal) {
+      code = registeredGlobal.school_code;
+    } else {
+      const resolved = await resolveDemoUserSchool(loginVal, password);
+      if (!resolved) throw new Error("invalid_credentials");
+      code = resolved.schoolCode;
+    }
+  }
 
   setActiveSchoolCode(code);
   state.schoolCode = code;
@@ -229,6 +242,7 @@ const AUTH_ERRORS = {
 };
 
 function authErrorMessage(err) {
+  if (err?.message === "invalid_credentials") return "Неверный логин или пароль";
   if (err?.message === "school_required") return AUTH_ERRORS.school_required;
   if (err?.message === "school_not_found") return AUTH_ERRORS.school_not_found;
   return AUTH_ERRORS[err?.message] || "Неверный логин или пароль";
@@ -263,11 +277,10 @@ async function renderAuth(options = {}) {
 
   const loginCard = `
     <form class="auth-card auth-panel" id="login-form" ${showRegister ? 'hidden' : ""}>
-      <h2>Вход в школу</h2>
-      <p class="sub">Укажите код школы, затем логин и пароль</p>
+      <h2>Вход</h2>
+      <p class="sub">Логин и пароль — школа определяется автоматически</p>
       ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите ниже.</p>` : ""}
       ${error && !showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
-      ${schoolFieldHtml(schoolPrefill)}
       <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
       <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
       <button type="submit" class="btn-primary">Войти</button>
@@ -324,12 +337,11 @@ async function renderAuth(options = {}) {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
-      await login(fd.get("school_code"), fd.get("login"), fd.get("password"), null);
+      await login(fd.get("login"), fd.get("password"), null);
     } catch (err) {
       renderAuth({
         error: authErrorMessage(err),
         authPanel: "login",
-        schoolCode: document.querySelector("#login-form [name=school_code]")?.value,
       });
     }
   });
@@ -370,8 +382,8 @@ async function renderAuth(options = {}) {
     btn.addEventListener("click", () => {
       const acc = DEMO_ACCOUNTS.find((d) => d.label === btn.dataset.demo);
       if (!acc) return;
-      login(acc.school, acc.login, acc.password, acc.uiMode).catch(() =>
-        renderAuth({ error: "Ошибка входа", authPanel: "login", schoolCode: acc.school })
+      login(acc.login, acc.password, acc.uiMode, acc.school).catch(() =>
+        renderAuth({ error: "Ошибка входа", authPanel: "login" })
       );
     });
   });
