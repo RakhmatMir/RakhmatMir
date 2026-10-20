@@ -951,6 +951,94 @@ body.nav-drawer-open {
   margin: 8px 0;
 }
 
+.stat-card--clickable {
+  cursor: pointer;
+  text-align: left;
+  border: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.admin-hint {
+  margin-top: 20px;
+}
+
+.btn-back {
+  margin-bottom: 16px;
+}
+
+.list-plain {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--lavh-radius-sm);
+  border: 1px solid var(--lavh-border);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.row-link:hover {
+  border-color: var(--lavh-blue);
+  box-shadow: 0 8px 20px rgba(74, 105, 226, 0.12);
+  transform: translateY(-1px);
+}
+
+.row-link-main {
+  font-weight: 700;
+  color: var(--lavh-text);
+}
+
+.admin-timing-block {
+  margin: 18px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--lavh-border);
+  border-bottom: 1px solid var(--lavh-border);
+}
+
+.admin-timing-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.admin-timing-input {
+  width: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--lavh-border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.btn-timing-save {
+  padding: 8px 14px;
+  min-width: 44px;
+}
+
+.admin-question-list {
+  margin: 12px 0 0;
+  padding-left: 1.2rem;
+  color: var(--lavh-text);
+}
+
+.admin-question-list li {
+  margin-bottom: 8px;
+}
+
 .test-list {
   list-style: none;
   margin: 16px 0 0;
