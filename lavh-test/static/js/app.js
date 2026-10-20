@@ -13,7 +13,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=35";
+} from "./portal-data.js?v=36";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +21,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=35";
+} from "./portal-app.js?v=36";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -367,6 +367,7 @@ async function ensurePortalRuntime() {
 async function refreshPortalMain() {
   await ensurePortalRuntime();
   portalState.session = state.session;
+  portalState.teacherUiMode = state.uiMode === "teacher";
   window.portalState = portalState;
 
   if (!portalDashboardBooted) {

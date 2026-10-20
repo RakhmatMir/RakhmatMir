@@ -917,7 +917,11 @@ body.nav-drawer-open {
   transition: transform 0.25s, box-shadow 0.25s;
 }
 
-.lavh-card:hover {
+.lavh-card--tappable {
+  cursor: pointer;
+}
+
+.lavh-card--tappable:hover {
   transform: translateY(-4px);
   box-shadow: var(--lavh-shadow-hover);
 }
@@ -962,7 +966,8 @@ body.nav-drawer-open {
   transition: transform 0.25s, box-shadow 0.25s;
 }
 
-.stat-card:hover {
+.stat-card--clickable:hover,
+.stat-card.is-tappable:hover {
   transform: translateY(-4px);
   box-shadow: var(--lavh-shadow-hover);
 }
@@ -1271,16 +1276,23 @@ body.lavh-app .portal-host .panel {
     border-color 0.28s ease;
 }
 
-body.lavh-app .portal-host .panel:hover {
+/* Статичные панели не «прыгают» — движение только у кликабельных строк/карточек */
+body.lavh-app .portal-host .panel {
+  transform: none;
+}
+
+body.lavh-app .portal-host .panel.is-tappable {
+  cursor: pointer;
+  transition:
+    transform 0.28s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+}
+
+body.lavh-app .portal-host .panel.is-tappable:hover {
   transform: translateY(-3px);
   box-shadow: var(--lavh-shadow-hover);
   border-color: color-mix(in srgb, var(--lavh-blue) 28%, var(--lavh-border));
-}
-
-body.lavh-app .portal-host .panel-collapse:hover,
-body.lavh-app .portal-host .panel-staff-tests:hover,
-body.lavh-app .portal-host .panel-notify:hover {
-  transform: none;
 }
 
 body.lavh-app .portal-host .panel h3,
@@ -1321,10 +1333,11 @@ body.lavh-app .portal-host .list-plain li.row-link {
     transform 0.22s ease;
 }
 
-body.lavh-app .portal-host .list-plain li.row-link:hover {
+body.lavh-app .portal-host .list-plain li.row-link.is-tappable:hover {
   background: var(--lavh-blue-bg);
   border-color: color-mix(in srgb, var(--lavh-blue) 22%, transparent);
-  transform: translateX(3px);
+  transform: translateX(4px);
+  box-shadow: 0 6px 18px rgba(74, 105, 226, 0.12);
 }
 
 body.lavh-app .portal-host .staff-tests-pool {
@@ -1393,4 +1406,57 @@ body.lavh-app .main-header p {
 
 body.lavh-app .lavh-breadcrumbs .crumb-link {
   color: var(--lavh-blue-deep);
+}
+
+.admin-school-form {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--lavh-border);
+}
+
+.admin-school-form h4 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.admin-school-form .field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-school-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--lavh-muted);
+}
+
+.admin-school-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--lavh-border);
+  border-radius: var(--lavh-radius-sm);
+  font: inherit;
+}
+
+.admin-school-form .form-msg {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
+.admin-school-form .form-msg.ok {
+  color: #0d9488;
+}
+
+.admin-school-form .form-msg.err {
+  color: var(--lavh-pink);
+}
+
+.admin-roster-list {
+  margin: 12px 0 0;
+  max-height: 220px;
+  overflow-y: auto;
 }

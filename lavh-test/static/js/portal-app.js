@@ -2155,6 +2155,93 @@ function isAdminRole() {
   return isStaffRole();
 }
 
+function canManageSchool() {
+  return portalState.session?.user?.role === "admin" && !portalState.teacherUiMode;
+}
+
+function adminFormErrorMessage(code) {
+  const map = {
+    class_name_required: "Укажите название класса (например 7А).",
+    class_exists: "Такой класс уже есть.",
+    student_invalid: "ФИО и логин (мин. 3 символа) обязательны.",
+    login_taken: "Этот логин уже занят.",
+    class_not_found: "Класс не найден.",
+  };
+  return map[code] || "Не удалось сохранить. Попробуйте ещё раз.";
+}
+
+function bindAdminAddClassForm(main) {
+  const form = main.querySelector("#form-add-class");
+  if (!form) return;
+  const msg = form.querySelector(".form-msg");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const class_name = String(fd.get("class_name") || "").trim();
+    if (msg) {
+      msg.hidden = true;
+      msg.textContent = "";
+    }
+    try {
+      await api("/api/portal/classes", {
+        method: "POST",
+        body: JSON.stringify({ class_name }),
+      });
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg ok";
+        msg.textContent = `Класс «${class_name}» добавлен. Откройте его в списке выше.`;
+      }
+      form.reset();
+      await renderAdminClassesPage(main);
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = adminFormErrorMessage(err.message);
+      }
+    }
+  });
+}
+
+function bindAdminAddStudentForm(main, className) {
+  const form = main.querySelector("#form-add-student");
+  if (!form) return;
+  const msg = form.querySelector(".form-msg");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const body = {
+      full_name: String(fd.get("full_name") || "").trim(),
+      login: String(fd.get("login") || "").trim(),
+      password: String(fd.get("password") || "").trim(),
+    };
+    if (msg) {
+      msg.hidden = true;
+      msg.textContent = "";
+    }
+    try {
+      const res = await api(`/api/portal/class/${encPath(className)}/students`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg ok";
+        msg.textContent = `Ученик добавлен. Вход: ${res.login} / ${res.password}`;
+      }
+      form.reset();
+      await renderAdminClassSubjects(main);
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = adminFormErrorMessage(err.message);
+      }
+    }
+  });
+}
+
 
 function renderStaffTestsPool(poolKey, label, tests) {
   const mod = poolKey === "done" ? "done" : "active";
@@ -2201,9 +2288,9 @@ function renderStaffHomeTestRows(tests, poolKey) {
         .map(escapeHtml)
         .join(" · ");
       const rowClass = poolKey === "done" ? " row-link--staff-done" : "";
-      return `<li class="row-link${rowClass}" role="button" tabindex="0" data-staff-test-pool="${escapeHtml(poolKey)}" data-staff-exam-idx="${idx}">
+      return `<li class="row-link is-tappable${rowClass}" role="button" tabindex="0" data-staff-test-pool="${escapeHtml(poolKey)}" data-staff-exam-idx="${idx}" title="Открыть контрольную">
         <span class="row-link-main">${mainLine}</span>
-        <span class="muted staff-tests-row-meta">${escapeHtml(sub)}</span>
+        <span class="muted staff-tests-row-meta">${escapeHtml(sub)} · открыть →</span>
       </li>`;
     })
     .join("");
@@ -2433,19 +2520,33 @@ async function renderAdminClassesPage(main) {
   const rows = classes.length
     ? classes
         .map(
-          (c) => `<li class="row-link" role="button" tabindex="0" data-class-name="${encPath(c.class_name)}">
+          (c) => `<li class="row-link is-tappable" role="button" tabindex="0" data-class-name="${encPath(c.class_name)}" title="Открыть класс">
         <span class="row-link-main">${escapeHtml(c.class_name)}</span>
-        <span class="muted">${c.student_count} уч. · ${c.test_count} тест.</span>
+        <span class="muted">${c.student_count} уч. · ${c.test_count} тест. · открыть →</span>
       </li>`
         )
         .join("")
-    : `<li><span class="muted">Нет классов — добавьте учеников с указанием класса</span></li>`;
+    : `<li><span class="muted">Пока нет классов — добавьте первый ниже.</span></li>`;
+  const addClassForm = canManageSchool()
+    ? `<section class="panel admin-school-form-panel">
+      <form id="form-add-class" class="admin-school-form">
+        <h4>Добавить класс</h4>
+        <div class="field-row">
+          <label><span>Название</span><input name="class_name" required placeholder="7А" maxlength="12" /></label>
+        </div>
+        <button type="submit" class="btn-primary" style="max-width:220px">Создать класс</button>
+        <p class="form-msg" hidden role="status"></p>
+      </form>
+    </section>`
+    : "";
   main.innerHTML = `
     <div class="panel">
       <h3>Классы</h3>
-      <p class="lead muted">Нажмите класс — откроются предметы, время и публикация тестов.</p>
+      <p class="lead muted">Строки с подсказкой «открыть →» ведут внутрь класса (предметы и ученики).</p>
       <ul class="list-plain">${rows}</ul>
-    </div>`;
+    </div>
+    ${addClassForm}`;
+  bindAdminAddClassForm(main);
   bindRowNav(main, "[data-class-name]", (el) => {
     portalState.staffTestsShortcut = false;
     const className = decodeURIComponent(el.getAttribute("data-class-name"));
@@ -2586,9 +2687,9 @@ async function renderAdminClassSubjects(main) {
   if (!classHub) {
     const rows = data.subjects
       .map(
-        (s) => `<li class="row-link" role="button" tabindex="0" data-subject-code="${escapeHtml(s.code)}">
+        (s) => `<li class="row-link is-tappable" role="button" tabindex="0" data-subject-code="${escapeHtml(s.code)}" title="Открыть предмет">
       <span class="row-link-main">${escapeHtml(s.title)}</span>
-      <span class="muted">${s.test_count} тест.</span>
+      <span class="muted">${s.test_count} тест. · открыть →</span>
     </li>`
       )
       .join("");
@@ -2598,12 +2699,49 @@ async function renderAdminClassSubjects(main) {
     </section>`;
   }
 
+  let rosterPanel = "";
+  if (canManageSchool()) {
+    try {
+      const rosterData = await api(`/api/portal/class/${encPath(cls)}/roster`);
+      const students = rosterData.students || [];
+      const rosterRows = students.length
+        ? students
+            .map(
+              (s) =>
+                `<li><span class="row-link-main">${escapeHtml(s.full_name)}</span> <span class="muted">id ${s.id}</span></li>`
+            )
+            .join("")
+        : `<li><span class="muted">В классе пока нет учеников</span></li>`;
+      rosterPanel = `
+        <section class="panel">
+          <h3>Ученики класса ${escapeHtml(cls)}</h3>
+          <ul class="list-plain admin-roster-list">${rosterRows}</ul>
+          <form id="form-add-student" class="admin-school-form">
+            <h4>Добавить ученика</h4>
+            <div class="field-row">
+              <label><span>ФИО</span><input name="full_name" required placeholder="Иванов Иван" /></label>
+              <label><span>Логин</span><input name="login" required placeholder="7a01" minlength="3" /></label>
+              <label><span>Пароль</span><input name="password" placeholder="авто, если пусто" /></label>
+            </div>
+            <button type="submit" class="btn-primary" style="max-width:240px">Добавить ученика</button>
+            <p class="form-msg" hidden role="status"></p>
+          </form>
+        </section>`;
+    } catch (err) {
+      console.warn("portal: roster", err);
+    }
+  }
+
   main.innerHTML = `
     <button type="button" class="btn-ghost btn-back" id="btn-back-classes">← К классам</button>
     ${classHub}
+    ${rosterPanel}
   `;
   if (isAdminRole()) {
     bindAdminTestsPanel(main, cls);
+  }
+  if (canManageSchool()) {
+    bindAdminAddStudentForm(main, cls);
   }
   $("btn-back-classes").addEventListener("click", () => {
     if (shellNavigate("classes")) return;
