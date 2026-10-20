@@ -2920,10 +2920,12 @@ async function renderAdminClassSubjects(main) {
   }
 
   let rosterPanel = "";
+  let rosterStudentCount = 0;
   if (canManageSchool()) {
     try {
       const rosterData = await api(`/api/portal/class/${encPath(cls)}/roster`);
       const students = rosterData.students || [];
+      rosterStudentCount = students.length;
       const rosterRows = renderAdminRosterListHtml(students);
       rosterPanel = `
         <section class="panel">
@@ -2977,10 +2979,7 @@ async function renderAdminClassSubjects(main) {
   }
   if (canManageSchool()) {
     bindAdminRosterExpand(main);
-    const rosterCount =
-      main.querySelectorAll(".admin-roster-list .admin-roster-item").length ||
-      main.querySelectorAll(".admin-roster-list li.admin-roster-item").length;
-    bindAdminAddStudentForm(main, cls, rosterCount);
+    bindAdminAddStudentForm(main, cls, rosterStudentCount);
   }
   $("btn-back-classes").addEventListener("click", () => {
     if (shellNavigate("classes")) return;
