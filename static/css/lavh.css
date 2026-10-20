@@ -781,10 +781,6 @@ body.nav-drawer-open {
     width: 72px;
   }
 
-  .sidebar {
-    overflow: visible;
-  }
-
   .sidebar-close {
     display: flex;
     align-items: center;
