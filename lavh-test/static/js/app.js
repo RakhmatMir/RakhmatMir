@@ -54,31 +54,17 @@ function logoImg(size = "md", alt = "LAVH Educational Technology") {
 
 const DEMO_ACCOUNTS = [
   {
-    label: "Foundation · админ",
+    label: "Учитель",
     school: "foundation",
     login: "admin",
     password: "admin123",
-    uiMode: "admin",
+    uiMode: "teacher",
   },
   {
-    label: "Foundation · ученик",
+    label: "Ученик",
     school: "foundation",
     login: "6b01",
     password: "6b01-401",
-    uiMode: "student",
-  },
-  {
-    label: "LAVH demo · админ",
-    school: "lavh-demo",
-    login: "admin",
-    password: "admin123",
-    uiMode: "admin",
-  },
-  {
-    label: "LAVH demo · ученик",
-    school: "lavh-demo",
-    login: "5a01",
-    password: "5a01-501",
     uiMode: "student",
   },
 ];
