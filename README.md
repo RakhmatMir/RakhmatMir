@@ -30,6 +30,8 @@ python3 -m http.server 8080
 
 **https://rakhmatmir.github.io/RakhmatMir/**
 
-Данные и логика тестов — `portal-data.js` (демо-режим в браузере, `PORTAL_USE_STATIC_DATA`).
+Данные и логика тестов — `portal-data.js` + полный интерфейс портала `portal-app.js` (как на рабочем сайте).
+
+Сдачи школы: `data/schools/<код>/submissions.json` (для foundation скопирован с демо-сервера; при появлении новых сдач файл можно обновить в репозитории).
 
 Файл `data/portal.json` устарел; используйте `data/schools/...`.
