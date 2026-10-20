@@ -31,7 +31,7 @@ body {
   min-height: 100%;
   font-family: "Manrope", system-ui, sans-serif;
   color: var(--lavh-text);
-  background: linear-gradient(145deg, #fafcff 0%, #f3f6fd 45%, #ffffff 100%);
+  background: linear-gradient(145deg, #f4f7ff 0%, #e8eef9 45%, #f8fafc 100%);
 }
 
 .app-root {
@@ -320,7 +320,7 @@ body {
 
 .sidebar {
   --sidebar-pad-x: 18px;
-  background: linear-gradient(180deg, #6d8ef0 0%, #7c9af4 52%, #8aa5f7 100%);
+  background: linear-gradient(180deg, #3d5bd8 0%, #4a69e2 55%, #5b7bef 100%);
   color: #fff;
   padding: 24px var(--sidebar-pad-x);
   display: flex;
@@ -387,11 +387,6 @@ body.nav-drawer-open {
   font-size: 1.1rem;
   letter-spacing: 0.04em;
   white-space: nowrap;
-}
-
-.sidebar-brand .brand-sep {
-  opacity: 0.55;
-  font-weight: 700;
 }
 
 .sidebar-brand small {
