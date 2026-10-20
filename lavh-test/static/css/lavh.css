@@ -784,13 +784,13 @@ body.nav-drawer-open {
     align-items: center;
     justify-content: center;
     position: absolute;
-    top: 50%;
+    top: 22px;
     right: 0;
-    transform: translate(50%, -50%);
+    transform: translateX(50%);
     width: auto;
     height: auto;
     margin: 0;
-    padding: 4px;
+    padding: 0;
     border: none;
     border-radius: 0;
     background: transparent;
