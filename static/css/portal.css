@@ -650,6 +650,13 @@ body.exam-guard-open #exam-guard-modal .exam-guard-dialog {
   background: color-mix(in srgb, var(--staff-pool-done) 14%, var(--ghost-hover));
 }
 
+.panel-staff-tests .staff-tests-pool-list li.row-link--staff-done .staff-tests-row-meta {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.45;
+  font-size: 0.88rem;
+}
+
 .data-table tbody tr.row-link {
   cursor: pointer;
 }
