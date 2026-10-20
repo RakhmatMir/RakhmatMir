@@ -87,9 +87,9 @@ body {
 }
 
 .lavh-logo--sidebar {
-  width: 52px;
+  width: 64px;
   height: auto;
-  margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
 .lavh-logo--footer {
@@ -352,21 +352,49 @@ body.nav-drawer-open {
   overflow: hidden;
 }
 
-.sidebar-brand {
-  padding: 8px 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+.sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 4px 16px;
   margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-brand {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.25;
 }
 
 .sidebar-brand .logo {
   font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: 0.06em;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.sidebar-brand .brand-sep {
+  opacity: 0.55;
+  font-weight: 700;
 }
 
 .sidebar-brand small {
-  opacity: 0.85;
-  font-size: 0.72rem;
+  opacity: 0.88;
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -746,21 +774,35 @@ body.nav-drawer-open {
     transform: translateX(0);
   }
 
+  .lavh-logo--sidebar {
+    width: 72px;
+  }
+
+  .sidebar-head {
+    position: relative;
+    padding-right: 2px;
+  }
+
   .sidebar-close {
     display: flex;
     align-items: center;
     justify-content: center;
-    align-self: flex-end;
-    width: 36px;
-    height: 36px;
-    margin: 0 4px 8px 0;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    margin: 0;
     border: none;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.15);
     color: #fff;
-    font-size: 1.4rem;
-    line-height: 1;
     cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sidebar-brand {
+    padding-right: 44px;
   }
 
   .nav-toggle {
