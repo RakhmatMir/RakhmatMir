@@ -2243,6 +2243,143 @@ function canManageSchool() {
   return portalState.session?.user?.role === "admin" && !portalState.teacherUiMode;
 }
 
+const ROSTER_PREVIEW_COUNT = 5;
+
+function classLoginPrefix(className) {
+  return (
+    String(className || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/б/g, "b")
+      .replace(/а/g, "a")
+      .replace(/[^a-z0-9]/g, "") || "student"
+  );
+}
+
+function suggestStudentLogin(className, rosterSize) {
+  const prefix = classLoginPrefix(className);
+  const n = Math.max(1, Number(rosterSize) || 0) + 1;
+  return `${prefix}${String(n).padStart(2, "0")}`;
+}
+
+function suggestStudentPassword(login) {
+  const base = String(login || "user").toLowerCase();
+  return `${base}-${Math.floor(100 + Math.random() * 900)}`;
+}
+
+function buildStudentCredentialText({ school, className, fullName, login, password }) {
+  return [
+    `Школа: ${school}`,
+    `Класс: ${className}`,
+    `ФИО: ${fullName}`,
+    `Логин: ${login}`,
+    `Пароль: ${password}`,
+    "",
+    "Сайт: https://rakhmatmir.github.io/RakhmatMir/",
+  ].join("\n");
+}
+
+function renderAdminRosterListHtml(students) {
+  if (!students.length) {
+    return `<li><span class="muted">В классе пока нет учеников</span></li>`;
+  }
+  const rows = students
+    .map((s, i) => {
+      const extra = i >= ROSTER_PREVIEW_COUNT;
+      return `<li class="admin-roster-item${extra ? " admin-roster-item--extra" : ""}"${extra ? " hidden" : ""}>
+        <span class="row-link-main">${escapeHtml(s.full_name)}</span>
+        <span class="muted">id ${s.id}</span>
+      </li>`;
+    })
+    .join("");
+  const expand =
+    students.length > ROSTER_PREVIEW_COUNT
+      ? `<button type="button" class="btn-ghost admin-roster-expand" data-count="${students.length - ROSTER_PREVIEW_COUNT}">Развернуть ещё ${students.length - ROSTER_PREVIEW_COUNT}</button>`
+      : "";
+  return `${rows}${expand ? `<li class="admin-roster-expand-wrap">${expand}</li>` : ""}`;
+}
+
+function bindAdminRosterExpand(main) {
+  const btn = main.querySelector(".admin-roster-expand");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const expanded = btn.getAttribute("data-expanded") === "true";
+    main.querySelectorAll(".admin-roster-item--extra").forEach((el) => {
+      el.hidden = !expanded ? false : true;
+    });
+    const n = btn.getAttribute("data-count");
+    if (expanded) {
+      btn.setAttribute("data-expanded", "false");
+      btn.textContent = `Развернуть ещё ${n}`;
+    } else {
+      btn.setAttribute("data-expanded", "true");
+      btn.textContent = "Свернуть список";
+    }
+  });
+}
+
+function bindAdminStudentCredentialTools(main, className, rosterSize) {
+  const form = main.querySelector("#form-add-student");
+  if (!form) return;
+  const loginInput = form.querySelector('[name="login"]');
+  const passwordInput = form.querySelector('[name="password"]');
+  const nameInput = form.querySelector('[name="full_name"]');
+  const preview = form.querySelector(".admin-credential-preview");
+  const school = portalState.session?.school_name || "Школа";
+
+  const syncPreview = () => {
+    const fullName = String(nameInput?.value || "").trim() || "—";
+    const login = String(loginInput?.value || "").trim() || "—";
+    const password = String(passwordInput?.value || "").trim() || "—";
+    const text = buildStudentCredentialText({
+      school,
+      className,
+      fullName,
+      login,
+      password,
+    });
+    if (preview) preview.textContent = text;
+    return text;
+  };
+
+  nameInput?.addEventListener("input", syncPreview);
+  loginInput?.addEventListener("input", syncPreview);
+  passwordInput?.addEventListener("input", syncPreview);
+  syncPreview();
+
+  form.querySelector("#btn-gen-student-login")?.addEventListener("click", () => {
+    if (loginInput) loginInput.value = suggestStudentLogin(className, rosterSize);
+    syncPreview();
+  });
+  form.querySelector("#btn-gen-student-password")?.addEventListener("click", () => {
+    const login = String(loginInput?.value || "").trim() || suggestStudentLogin(className, rosterSize);
+    if (passwordInput) passwordInput.value = suggestStudentPassword(login);
+    syncPreview();
+  });
+
+  form.querySelector("#btn-copy-student-cred")?.addEventListener("click", async () => {
+    const text = syncPreview();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  form.querySelector("#btn-download-student-cred")?.addEventListener("click", () => {
+    const text = syncPreview();
+    const login = String(loginInput?.value || "student").trim() || "student";
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ученик-${login}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
 function adminFormErrorMessage(code) {
   const map = {
     class_name_required: "Укажите название класса (например 7А).",
@@ -2288,9 +2425,10 @@ function bindAdminAddClassForm(main) {
   });
 }
 
-function bindAdminAddStudentForm(main, className) {
+function bindAdminAddStudentForm(main, className, rosterSize = 0) {
   const form = main.querySelector("#form-add-student");
   if (!form) return;
+  bindAdminStudentCredentialTools(main, className, rosterSize);
   const msg = form.querySelector(".form-msg");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -2786,14 +2924,7 @@ async function renderAdminClassSubjects(main) {
     try {
       const rosterData = await api(`/api/portal/class/${encPath(cls)}/roster`);
       const students = rosterData.students || [];
-      const rosterRows = students.length
-        ? students
-            .map(
-              (s) =>
-                `<li><span class="row-link-main">${escapeHtml(s.full_name)}</span> <span class="muted">id ${s.id}</span></li>`
-            )
-            .join("")
-        : `<li><span class="muted">В классе пока нет учеников</span></li>`;
+      const rosterRows = renderAdminRosterListHtml(students);
       rosterPanel = `
         <section class="panel">
           <h3>Ученики класса ${escapeHtml(cls)}</h3>
@@ -2801,10 +2932,32 @@ async function renderAdminClassSubjects(main) {
           <form id="form-add-student" class="admin-school-form">
             <h4>Добавить ученика</h4>
             <div class="field-row">
-              <label><span>ФИО</span><input name="full_name" required placeholder="Иванов Иван" /></label>
-              <label><span>Логин</span><input name="login" required placeholder="7a01" minlength="3" /></label>
-              <label><span>Пароль</span><input name="password" placeholder="авто, если пусто" /></label>
+              <label><span>ФИО</span><input name="full_name" required placeholder="Иванов Иван" autocomplete="name" /></label>
             </div>
+            <div class="field-row admin-cred-fields">
+              <label class="admin-field-with-btn"><span>Логин</span>
+                <div class="admin-input-actions">
+                  <input name="login" required placeholder="6b19" minlength="3" autocomplete="off" />
+                  <button type="button" class="btn-ghost btn-mini" id="btn-gen-student-login">Сгенерировать</button>
+                </div>
+              </label>
+              <label class="admin-field-with-btn"><span>Пароль</span>
+                <div class="admin-input-actions">
+                  <input name="password" placeholder="авто при сохранении" autocomplete="new-password" />
+                  <button type="button" class="btn-ghost btn-mini" id="btn-gen-student-password">Сгенерировать</button>
+                </div>
+              </label>
+            </div>
+            <div class="admin-cred-toolbar">
+              <button type="button" class="btn-ghost btn-mini admin-cred-tool" id="btn-copy-student-cred" title="Скопировать в буфер">
+                <span aria-hidden="true">⎘</span> Скопировать
+              </button>
+              <button type="button" class="btn-ghost btn-mini admin-cred-tool" id="btn-download-student-cred" title="Скачать файлом">
+                <span aria-hidden="true">↓</span> Скачать
+              </button>
+            </div>
+            <p class="muted admin-credential-format-label">Формат для ученика (так скопируется / скачается):</p>
+            <pre class="admin-credential-preview" aria-live="polite"></pre>
             <button type="submit" class="btn-primary" style="max-width:240px">Добавить ученика</button>
             <p class="form-msg" hidden role="status"></p>
           </form>
@@ -2823,7 +2976,11 @@ async function renderAdminClassSubjects(main) {
     bindAdminTestsPanel(main, cls);
   }
   if (canManageSchool()) {
-    bindAdminAddStudentForm(main, cls);
+    bindAdminRosterExpand(main);
+    const rosterCount =
+      main.querySelectorAll(".admin-roster-list .admin-roster-item").length ||
+      main.querySelectorAll(".admin-roster-list li.admin-roster-item").length;
+    bindAdminAddStudentForm(main, cls, rosterCount);
   }
   $("btn-back-classes").addEventListener("click", () => {
     if (shellNavigate("classes")) return;
@@ -3679,7 +3836,6 @@ async function renderStudentFlow() {
   const main = portalMain();
   if (!main) return;
   const session = portalState.session;
-  const u = session.user;
   if (
     isStudentTestSessionLocked() &&
     (portalState.adminView !== "exam" ||
