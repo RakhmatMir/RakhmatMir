@@ -584,7 +584,6 @@ function renderProfile() {
   const user = state.session?.user;
   if (!user) return "";
   const reg = getRegisteredByLogin(state.schoolCode || state.session?.school_code, user.login);
-  const avatarUrl = getAvatarUrl(user.id);
   const accountKind =
     state.userKind === "public" ? "Свободный доступ (регистрация)" : "Школа / демо-портал";
   const rows = [
