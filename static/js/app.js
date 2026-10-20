@@ -26,6 +26,7 @@ const state = {
   exam: null,
   bundle: null,
   schoolCode: "",
+  adminNav: { className: null, subjectCode: null, examId: null },
 };
 
 window.portalState = state;
@@ -162,6 +163,9 @@ function setMobileNavOpen(open) {
 
 async function switchView(id) {
   if (state.view === id || state.leaving) return;
+  if (id === "admin-home") {
+    state.adminNav = { className: null, subjectCode: null, examId: null };
+  }
   setMobileNavOpen(false);
   state.leaving = true;
   const stage = document.querySelector(".main-panel");
@@ -402,6 +406,9 @@ async function renderMainContent() {
   if (v === "class-stats") return renderClassStats();
   if (v === "errors") return renderErrorsAgg();
   if (v === "admin-home") return renderAdminHome();
+  if (v === "admin-class") return renderAdminClassView();
+  if (v === "admin-subject") return renderAdminSubjectView();
+  if (v === "admin-exam") return renderAdminExamView();
   if (v === "classes") return renderAdminClasses();
   if (v === "profile") return renderProfile();
   if (v === "settings") return renderSettings();
@@ -519,23 +526,41 @@ async function renderStudentHome() {
 }
 
 async function renderStudentTests() {
-  const subjects = await api("/api/portal/my/subjects");
-  const cls = subjects.class_name;
-  const code = subjects.subjects[0]?.code || "math";
-  const data = await api(`/api/portal/class/${encodeURIComponent(cls)}/subjects/${code}/tests`);
-  const tests = data.tests || [];
+  let tests = [];
+  let cls = "";
+  let published = false;
+  let minutesPer = 15;
+  try {
+    const bundle = await api("/api/portal/my/exam-bundle");
+    tests = (bundle.tests || []).map((t) => ({
+      id: t.exam_id,
+      title: t.title,
+      subject_title: t.subject_title,
+      submitted: t.submitted,
+    }));
+    cls = bundle.class_name;
+    published = bundle.published;
+    minutesPer = bundle.minutes_per_test ?? 15;
+  } catch {
+    const subjects = await api("/api/portal/my/subjects");
+    cls = subjects.class_name;
+    const code = subjects.subjects[0]?.code || "math";
+    const data = await api(`/api/portal/class/${encodeURIComponent(cls)}/subjects/${code}/tests`);
+    tests = (data.tests || []).map((t) => ({ ...t, id: t.id }));
+    published = true;
+  }
 
   return `
     <div class="lavh-card">
       <h3>Тесты класса (${tests.length})</h3>
-      <p class="muted">Ждём публикации · ≈15 мин на тест · ${escapeHtml(cls)}</p>
+      <p class="muted">${published ? `≈${minutesPer} мин на тест` : "Ждём публикации администратора"} · ${escapeHtml(cls)}</p>
       <ul class="test-list">
         ${tests
           .map((t) => {
             const done = t.submitted || t.catalog_key === "done";
-            const label = t.student_label || (done ? "Сдано" : "К сдаче");
+            const label = t.student_label || (done ? "Сдано" : published ? "К сдаче" : "Скоро");
             return `<li class="test-item ${done ? "done" : ""}" data-exam="${t.id}" data-done="${done ? "1" : "0"}">
-              <span>${escapeHtml(t.title || t.subject_title)}</span>
+              <span>${escapeHtml(t.subject_title ? `${t.subject_title}: ` : "")}${escapeHtml(t.title || "")}</span>
               <span class="badge">${escapeHtml(label)}</span>
             </li>`;
           })
@@ -731,7 +756,7 @@ async function renderTeacherHome() {
           <div class="metric-chip"><strong>${ex?.duration_minutes ?? 15} мин</strong>лимит</div>
         </div>
       </div>
-      <div class="stat-card yellow"><small>Контрольная №1</small><div class="big">демо</div><small>аналитика класса</small></div>
+      <div class="stat-card yellow stat-card--clickable" role="button" tabindex="0" data-view-jump="class-stats"><small>Контрольная №1</small><div class="big">демо</div><small>аналитика класса</small></div>
     </div>
     <p class="muted" style="margin-top:16px">Уменьшенный превью блоков — полная таблица в «Статистика класса».</p>
     <div class="preview-strip">
@@ -818,6 +843,29 @@ async function renderErrorsAgg() {
     </div>`;
 }
 
+function openAdminClass(className) {
+  state.adminNav = { className, subjectCode: null, examId: null };
+  switchView("admin-class");
+}
+
+function openAdminSubject(subjectCode) {
+  state.adminNav.subjectCode = subjectCode;
+  state.adminNav.examId = null;
+  switchView("admin-subject");
+}
+
+function openAdminExam(examId) {
+  state.adminNav.examId = Number(examId);
+  switchView("admin-exam");
+}
+
+function subjectCodeForExam(ex, subjects) {
+  if (ex.subject_code) return ex.subject_code;
+  const title = ex.subject_title || "";
+  const sub = (subjects || []).find((s) => s.title === title);
+  return sub?.code || "";
+}
+
 async function renderAdminHome() {
   const classes = await api("/api/portal/classes");
   return `
@@ -825,32 +873,282 @@ async function renderAdminHome() {
       ${classes
         .map(
           (c, i) =>
-            `<div class="stat-card ${["yellow", "blue", "pink"][i % 3]}"><small>${escapeHtml(c.class_name)}</small><div class="big">${c.student_count}</div><small>учеников · ${c.test_count} теста</small></div>`
+            `<div class="stat-card stat-card--clickable ${["yellow", "blue", "pink"][i % 3]}" role="button" tabindex="0" data-admin-class="${escapeHtml(c.class_name)}">
+              <small>${escapeHtml(c.class_name)}</small>
+              <div class="big">${c.student_count}</div>
+              <small>учеников · ${c.test_count} теста</small>
+            </div>`
         )
         .join("")}
     </div>
-    <p style="margin-top:20px;color:var(--lavh-muted)">Админ: классы, публикация бандла — раздел «Классы».</p>`;
+    <p class="muted admin-hint">Нажмите на карточку класса, чтобы открыть предметы, время и публикацию тестов.</p>`;
+}
+
+async function renderAdminClassView() {
+  const cls = state.adminNav.className;
+  if (!cls) return `<p class="muted">Класс не выбран.</p>`;
+
+  const subjectsData = await api(`/api/portal/class/${encodeURIComponent(cls)}/subjects`);
+  const subjects = subjectsData.subjects || [];
+  let timingData;
+  let bundleData;
+  try {
+    timingData = await api(`/api/portal/class/${encodeURIComponent(cls)}/exam-timing`);
+    bundleData = await api(`/api/portal/class/${encodeURIComponent(cls)}/exam-bundle`);
+  } catch {
+    timingData = { schedule: { total_minutes: 45, test_count: 3, minutes_per_test: 15 } };
+    bundleData = { bundle_published: false, exams: [] };
+  }
+  const sch = timingData.schedule || {};
+  const count = sch.test_count ?? bundleData.exams?.length ?? subjects.length;
+  const perTest = sch.minutes_per_test ?? Math.max(5, Math.floor((sch.total_minutes || 45) / (count || 1)));
+  const published = Boolean(bundleData.bundle_published);
+  const exams = bundleData.exams || [];
+
+  const rows = exams.length
+    ? exams
+        .map((ex, i) => {
+          const code = subjectCodeForExam(ex, subjects);
+          return `<li class="row-link" role="button" tabindex="0" data-admin-subject="${escapeHtml(code)}">
+            <span class="row-link-main">${i + 1}. ${escapeHtml(ex.subject_title || "")}</span>
+            <span class="muted">${escapeHtml(ex.title || "")}</span>
+          </li>`;
+        })
+        .join("")
+    : subjects
+        .map(
+          (s, i) =>
+            `<li class="row-link" role="button" tabindex="0" data-admin-subject="${escapeHtml(s.code)}">
+              <span class="row-link-main">${i + 1}. ${escapeHtml(s.title)}</span>
+              <span class="muted">${s.test_count} тест.</span>
+            </li>`
+        )
+        .join("");
+
+  return `
+    <button type="button" class="btn-ghost btn-back" data-admin-back="home">← К классам</button>
+    <div class="lavh-card admin-class-hub" id="admin-class-panel" data-class-name="${escapeHtml(cls)}">
+      <h3>Класс ${escapeHtml(cls)}</h3>
+      <p class="muted">Ученик сам выбирает, какой тест сдать. Каждый тест можно сдать один раз.</p>
+      <div class="admin-timing-block">
+        <p class="muted">Общее время на все тесты (делится поровну): <strong>${count}</strong> тест(а) · ≈ <strong id="admin-timing-per-test">${perTest}</strong> мин на каждый.</p>
+        <label class="admin-timing-row">
+          <span>Общее время</span>
+          <input type="number" id="admin-timing-total" class="admin-timing-input" min="15" max="300" value="${sch.total_minutes ?? 45}" />
+          <span class="muted">мин</span>
+          <button type="button" class="btn-secondary btn-timing-save" id="btn-save-exam-timing" disabled>✓</button>
+        </label>
+        <p class="muted" id="admin-timing-preview" data-test-count="${count}"></p>
+        <p class="muted admin-msg" id="admin-timing-msg" hidden></p>
+      </div>
+      <p class="muted">Нажмите строку, чтобы открыть и проверить вопросы теста.</p>
+      <ul class="list-plain">${rows}</ul>
+      <p class="muted">Статус: <strong>${published ? "опубликованы для учеников" : "ещё не опубликованы"}</strong></p>
+      <button type="button" class="btn-primary" id="btn-publish-exam-bundle"${published ? " hidden" : ""}>Опубликовать для учеников</button>
+      <p class="muted admin-msg" id="admin-bundle-msg" hidden></p>
+    </div>`;
+}
+
+async function renderAdminSubjectView() {
+  const cls = state.adminNav.className;
+  const code = state.adminNav.subjectCode;
+  if (!cls || !code) return `<p class="muted">Предмет не выбран.</p>`;
+
+  const data = await api(
+    `/api/portal/class/${encodeURIComponent(cls)}/subjects/${encodeURIComponent(code)}/tests`
+  );
+  const tests = data.tests || [];
+
+  return `
+    <button type="button" class="btn-ghost btn-back" data-admin-back="class">← К классу</button>
+    <div class="lavh-card">
+      <h3>${escapeHtml(data.subject_title || code)}</h3>
+      <p class="muted">Класс ${escapeHtml(cls)} · выберите контрольную</p>
+      <ul class="list-plain">
+        ${tests
+          .map(
+            (t) =>
+              `<li class="row-link" role="button" tabindex="0" data-admin-exam="${t.id}">
+                <span class="row-link-main">${escapeHtml(t.control_date || "")} · ${escapeHtml(t.title)}</span>
+                <span class="muted">${t.question_count ?? "—"} вопр.</span>
+              </li>`
+          )
+          .join("")}
+      </ul>
+    </div>`;
+}
+
+async function renderAdminExamView() {
+  const examId = state.adminNav.examId;
+  if (!examId) return `<p class="muted">Тест не выбран.</p>`;
+
+  const data = await api(`/api/portal/exams/${examId}/admin`);
+  const ex = data.exam;
+  const students = data.students || [];
+
+  return `
+    <button type="button" class="btn-ghost btn-back" data-admin-back="subject">← К предметам</button>
+    <div class="lavh-card">
+      <h3>${escapeHtml(ex?.title || "Контрольная")}</h3>
+      <p class="muted">${escapeHtml(ex?.subject_title || "")} · класс ${escapeHtml(ex?.class_name || "")}</p>
+      <div class="metric-row">
+        <div class="metric-chip"><strong>${data.submitted_count ?? 0}/${data.class_total ?? 0}</strong>сдали</div>
+        <div class="metric-chip"><strong>${ex?.question_count ?? "—"}</strong>вопросов</div>
+        <div class="metric-chip"><strong>${ex?.duration_minutes ?? "—"} мин</strong>лимит</div>
+      </div>
+    </div>
+    <div class="lavh-card" style="margin-top:16px">
+      <h3>Ученики</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>ФИО</th><th>Статус</th><th>Балл</th></tr></thead>
+          <tbody>
+            ${students
+              .map(
+                (s) =>
+                  `<tr><td>${escapeHtml(s.full_name)}</td><td>${escapeHtml(s.status_label || s.status || "—")}</td><td>${s.score_percent != null ? `${s.score_percent}%` : "—"}</td></tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="lavh-card" style="margin-top:16px">
+      <h3>Вопросы теста</h3>
+      <ol class="admin-question-list">
+        ${(data.questions || [])
+          .slice(0, 8)
+          .map((q) => `<li>${escapeHtml(q.text)}</li>`)
+          .join("")}
+        ${(data.questions || []).length > 8 ? `<li class="muted">… и ещё ${data.questions.length - 8}</li>` : ""}
+      </ol>
+    </div>`;
 }
 
 async function renderAdminClasses() {
   const classes = await api("/api/portal/classes");
-  const cls = classes[0]?.class_name || "6Б";
-  const subj = await api(`/api/portal/class/${encodeURIComponent(cls)}/subjects`);
   return `
-    <div class="grid-2">
-      <div class="lavh-card" style="border-left:6px solid var(--lavh-pink)">
-        <h3>Классы</h3>
-        <ul class="test-list">
-          ${classes.map((c) => `<li class="test-item"><span>${escapeHtml(c.class_name)}</span><span class="muted">${c.student_count} уч. · ${c.test_count} тестов</span></li>`).join("")}
-        </ul>
-      </div>
-      <div class="lavh-card" style="border-left:6px solid var(--lavh-purple)">
-        <h3>Класс ${escapeHtml(cls)}</h3>
-        <ul class="test-list">
-          ${(subj.subjects || []).map((s) => `<li class="test-item"><span>${escapeHtml(s.title)}</span><span class="badge">1 тест</span></li>`).join("")}
-        </ul>
-      </div>
+    <div class="lavh-card">
+      <h3>Классы</h3>
+      <ul class="list-plain">
+        ${classes
+          .map(
+            (c) =>
+              `<li class="row-link" role="button" tabindex="0" data-admin-class="${escapeHtml(c.class_name)}">
+                <span class="row-link-main">${escapeHtml(c.class_name)}</span>
+                <span class="muted">${c.student_count} уч. · ${c.test_count} тестов</span>
+              </li>`
+          )
+          .join("")}
+      </ul>
     </div>`;
+}
+
+function bindAdminNavigation() {
+  document.querySelectorAll("[data-admin-class]").forEach((el) => {
+    const go = () => openAdminClass(el.getAttribute("data-admin-class"));
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        go();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-admin-subject]").forEach((el) => {
+    const go = () => openAdminSubject(el.getAttribute("data-admin-subject"));
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        go();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-admin-exam]").forEach((el) => {
+    el.addEventListener("click", () => openAdminExam(el.getAttribute("data-admin-exam")));
+  });
+
+  document.querySelectorAll("[data-admin-back]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-admin-back");
+      if (target === "home") switchView("admin-home");
+      else if (target === "class") switchView("admin-class");
+      else if (target === "subject") switchView("admin-subject");
+    });
+  });
+
+  const panel = document.getElementById("admin-class-panel");
+  if (!panel) return;
+  const className = panel.getAttribute("data-class-name");
+  const totalInput = panel.querySelector("#admin-timing-total");
+  const saveBtn = panel.querySelector("#btn-save-exam-timing");
+  const preview = panel.querySelector("#admin-timing-preview");
+  const perTestEl = panel.querySelector("#admin-timing-per-test");
+  const timingMsg = panel.querySelector("#admin-timing-msg");
+  const testCount = Number(preview?.getAttribute("data-test-count")) || 3;
+  let savedTotal = Number(totalInput?.value) || 45;
+
+  const refreshTiming = () => {
+    const total = Number(totalInput?.value) || 45;
+    const per = Math.max(5, Math.floor(total / testCount));
+    if (perTestEl) perTestEl.textContent = String(per);
+    if (preview) preview.textContent = `${total} мин ÷ ${testCount} = ${per} мин на тест.`;
+    if (saveBtn) saveBtn.disabled = total === savedTotal;
+  };
+  totalInput?.addEventListener("input", refreshTiming);
+  refreshTiming();
+
+  saveBtn?.addEventListener("click", async () => {
+    const total = Number(totalInput?.value);
+    saveBtn.disabled = true;
+    try {
+      await api(`/api/portal/class/${encodeURIComponent(className)}/exam-timing`, {
+        method: "POST",
+        body: JSON.stringify({ total_minutes: total }),
+      });
+      savedTotal = total;
+      if (timingMsg) {
+        timingMsg.hidden = false;
+        timingMsg.textContent = "Время сохранено.";
+      }
+      refreshTiming();
+    } catch {
+      if (timingMsg) {
+        timingMsg.hidden = false;
+        timingMsg.textContent = "Не удалось сохранить.";
+      }
+    } finally {
+      refreshTiming();
+    }
+  });
+
+  panel.querySelector("#btn-publish-exam-bundle")?.addEventListener("click", async () => {
+    const pubBtn = panel.querySelector("#btn-publish-exam-bundle");
+    const pubMsg = panel.querySelector("#admin-bundle-msg");
+    pubBtn.disabled = true;
+    try {
+      await api(`/api/portal/class/${encodeURIComponent(className)}/exam-bundle`, {
+        method: "POST",
+        body: JSON.stringify({ action: "publish" }),
+      });
+      if (pubMsg) {
+        pubMsg.hidden = false;
+        pubMsg.textContent = "Тесты опубликованы для учеников.";
+      }
+      pubBtn.hidden = true;
+      switchView("admin-class");
+    } catch {
+      if (pubMsg) {
+        pubMsg.hidden = false;
+        pubMsg.textContent = "Не удалось опубликовать.";
+      }
+    } finally {
+      pubBtn.disabled = false;
+    }
+  });
 }
 
 const VIEW_TITLES = {
@@ -864,7 +1162,10 @@ const VIEW_TITLES = {
   "class-stats": ["Статистика класса", "Ученики и баллы"],
   errors: ["Агрегация ошибок", "Диагностика усвоения"],
   "admin-home": ["Администратор", "Управление школой"],
-  classes: ["Классы и предметы", "Редактирование структуры"],
+  "admin-class": ["Класс", "Предметы и публикация тестов"],
+  "admin-subject": ["Предмет", "Контрольные работы"],
+  "admin-exam": ["Контрольная", "Статистика и вопросы"],
+  classes: ["Классы", "Список классов школы"],
   profile: ["Профиль", "Ваши данные в системе"],
   settings: ["Настройки", "Параметры аккаунта"],
 };
@@ -951,6 +1252,10 @@ async function renderShell() {
   bindExam();
   bindProfile();
   bindSettings();
+  bindAdminNavigation();
+  document.querySelectorAll("[data-view-jump]").forEach((el) => {
+    el.addEventListener("click", () => switchView(el.getAttribute("data-view-jump")));
+  });
   document.getElementById("btn-details")?.addEventListener("click", () => alert("В полной версии — окно с ответами по каждому вопросу."));
 }
 
