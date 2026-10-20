@@ -320,7 +320,8 @@ body {
 
 .sidebar {
   --sidebar-pad-x: 18px;
-  background: linear-gradient(180deg, #3d5bd8 0%, #4a69e2 55%, #5b7bef 100%);
+  /* Deep navy: pairs with warm gold logo (#807060) without washing out labels */
+  background: linear-gradient(180deg, #1f2f4f 0%, #273a5e 52%, #2f456c 100%);
   color: #fff;
   padding: 24px var(--sidebar-pad-x);
   display: flex;
@@ -387,12 +388,15 @@ body.nav-drawer-open {
   font-size: 1.1rem;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  color: #ffffff;
 }
 
 .sidebar-brand small {
-  opacity: 0.88;
   font-size: 0.68rem;
+  font-weight: 600;
   white-space: nowrap;
+  color: #e2d4bc;
+  letter-spacing: 0.02em;
 }
 
 .sidebar-nav {
