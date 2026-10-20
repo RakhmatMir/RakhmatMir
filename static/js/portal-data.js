@@ -61,7 +61,7 @@ export async function resolveDemoUserSchool(login, password) {
     if (!schoolCode) continue;
     let bundle;
     try {
-      bundle = await loadPortalBundle({ schoolCode });
+      bundle = await getMergedBundle({ schoolCode });
     } catch {
       continue;
     }
@@ -157,6 +157,109 @@ export async function loadPortalBundle(options = {}) {
     bundlePromises.set(schoolCode, promise);
   }
   return bundlePromises.get(schoolCode);
+}
+
+const SCHOOL_EDITS_KEY = "portal_school_edits_v1";
+
+function loadSchoolEdits() {
+  try {
+    const raw = localStorage.getItem(scopedStorageKey(SCHOOL_EDITS_KEY));
+    const data = raw ? JSON.parse(raw) : null;
+    return {
+      classes: Array.isArray(data?.classes) ? data.classes : [],
+      rosterAdds: data?.rosterAdds && typeof data.rosterAdds === "object" ? data.rosterAdds : {},
+      demoUsers: Array.isArray(data?.demoUsers) ? data.demoUsers : [],
+    };
+  } catch {
+    return { classes: [], rosterAdds: {}, demoUsers: [] };
+  }
+}
+
+function saveSchoolEdits(edits) {
+  localStorage.setItem(scopedStorageKey(SCHOOL_EDITS_KEY), JSON.stringify(edits));
+}
+
+function cloneBundle(bundle) {
+  return JSON.parse(JSON.stringify(bundle));
+}
+
+function countExamsForClass(bundle, className) {
+  return (bundle.exams || []).filter((ex) => ex.class_name === className).length;
+}
+
+function nextStudentId(bundle, edits) {
+  let max = 100;
+  for (const u of bundle.demo_users || []) {
+    if (Number.isFinite(Number(u.id))) max = Math.max(max, Number(u.id));
+  }
+  for (const u of edits.demoUsers || []) {
+    if (Number.isFinite(Number(u.id))) max = Math.max(max, Number(u.id));
+  }
+  for (const list of Object.values(bundle.rosters || {})) {
+    for (const row of list || []) {
+      if (Number.isFinite(Number(row.id))) max = Math.max(max, Number(row.id));
+    }
+  }
+  for (const list of Object.values(edits.rosterAdds || {})) {
+    for (const row of list || []) {
+      if (Number.isFinite(Number(row.id))) max = Math.max(max, Number(row.id));
+    }
+  }
+  return max + 1;
+}
+
+function mergeSchoolEdits(bundle) {
+  const base = cloneBundle(bundle);
+  const edits = loadSchoolEdits();
+  if (!base.rosters) base.rosters = {};
+  if (!base.classes) base.classes = [];
+  if (!base.demo_users) base.demo_users = [];
+
+  for (const row of edits.classes) {
+    const className = String(row.class_name || "").trim();
+    if (!className) continue;
+    if (!base.classes.some((c) => c.class_name === className)) {
+      base.classes.push({
+        class_name: className,
+        student_count: 0,
+        test_count: countExamsForClass(base, className),
+      });
+    }
+    if (!base.rosters[className]) base.rosters[className] = [];
+    if (!base.class_schedules) base.class_schedules = {};
+    if (!base.class_schedules[className]) {
+      base.class_schedules[className] = { total_minutes: 45, bundle_published: false };
+    }
+  }
+
+  for (const [className, adds] of Object.entries(edits.rosterAdds)) {
+    if (!base.rosters[className]) base.rosters[className] = [];
+    const existingIds = new Set(base.rosters[className].map((r) => r.id));
+    for (const student of adds || []) {
+      if (existingIds.has(student.id)) continue;
+      base.rosters[className].push(student);
+      existingIds.add(student.id);
+    }
+  }
+
+  for (const u of edits.demoUsers) {
+    if (!base.demo_users.some((x) => String(x.login).toLowerCase() === String(u.login).toLowerCase())) {
+      base.demo_users.push(u);
+    }
+  }
+
+  for (const c of base.classes) {
+    const roster = base.rosters[c.class_name] || [];
+    c.student_count = roster.length;
+    c.test_count = countExamsForClass(base, c.class_name);
+  }
+
+  return base;
+}
+
+export async function getMergedBundle(options = {}) {
+  const base = await loadPortalBundle(options);
+  return mergeSchoolEdits(base);
 }
 
 function loadSubmissions() {
@@ -926,7 +1029,7 @@ export function persistDemoSession(session) {
 /** Демо-вход из portal.json. Пароли открыты — только для показа. */
 export async function demoAuthApi(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const bundle = await loadPortalBundle();
+  const bundle = await getMergedBundle();
 
   if (path === "/api/login" && method === "POST") {
     const body = parseBody(options);
@@ -972,7 +1075,7 @@ function currentUser() {
 }
 
 export async function dataApi(path, options = {}) {
-  const bundle = await loadPortalBundle();
+  const bundle = await getMergedBundle();
   enforceClearedStudents(bundle);
   const method = String(options.method || "GET").toUpperCase();
   const user = currentUser();
@@ -986,6 +1089,67 @@ export async function dataApi(path, options = {}) {
   if (path === "/api/portal/classes" && method === "GET") {
     if (!user || user.role !== "admin") throw new Error("forbidden");
     return bundle.classes;
+  }
+
+  if (path === "/api/portal/classes" && method === "POST") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const body = parseBody(options);
+    const class_name = String(body.class_name || "").trim();
+    if (!class_name) throw new Error("class_name_required");
+    if (bundle.classes.some((c) => c.class_name === class_name)) throw new Error("class_exists");
+    const edits = loadSchoolEdits();
+    edits.classes.push({ class_name });
+    if (!edits.rosterAdds[class_name]) edits.rosterAdds[class_name] = [];
+    saveSchoolEdits(edits);
+    return { ok: true, class_name, student_count: 0, test_count: 0 };
+  }
+
+  let m = path.match(/^\/api\/portal\/class\/([^/]+)\/roster$/);
+  if (m && method === "GET") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const cls = decodeURIComponent(m[1]);
+    const roster = classRoster(bundle, cls);
+    return { class_name: cls, students: roster };
+  }
+
+  m = path.match(/^\/api\/portal\/class\/([^/]+)\/students$/);
+  if (m && method === "POST") {
+    if (!user || user.role !== "admin") throw new Error("forbidden");
+    const cls = decodeURIComponent(m[1]);
+    if (!bundle.classes.some((c) => c.class_name === cls)) throw new Error("class_not_found");
+    const body = parseBody(options);
+    const full_name = String(body.full_name || "").trim();
+    const login = String(body.login || "").trim().toLowerCase();
+    const password = String(body.password || "").trim();
+    if (!full_name || login.length < 3) throw new Error("student_invalid");
+    const edits = loadSchoolEdits();
+    const allLogins = new Set(
+      [...(bundle.demo_users || []), ...(edits.demoUsers || [])].map((u) =>
+        String(u.login).toLowerCase()
+      )
+    );
+    if (allLogins.has(login)) throw new Error("login_taken");
+    const id = nextStudentId(bundle, edits);
+    const pwd = password || `${login}-${id}`;
+    const rosterRow = {
+      id,
+      full_name,
+      status: "not_started",
+      score_percent: null,
+    };
+    const demoUser = {
+      id,
+      login,
+      password: pwd,
+      full_name,
+      role: "student",
+      class_name: cls,
+    };
+    if (!edits.rosterAdds[cls]) edits.rosterAdds[cls] = [];
+    edits.rosterAdds[cls].push(rosterRow);
+    edits.demoUsers.push(demoUser);
+    saveSchoolEdits(edits);
+    return { ok: true, student: rosterRow, login, password: pwd };
   }
 
   if (path === "/api/portal/staff/tests" && method === "GET") {
@@ -1027,7 +1191,7 @@ export async function dataApi(path, options = {}) {
     return { tests, overall_score_percent };
   }
 
-  let m = path.match(/^\/api\/portal\/class\/([^/]+)\/subjects$/);
+  m = path.match(/^\/api\/portal\/class\/([^/]+)\/subjects$/);
   if (m && method === "GET") {
     if (!user || user.role !== "admin") throw new Error("forbidden");
     return { subjects: bundle.subjects, class_name: decodeURIComponent(m[1]) };
