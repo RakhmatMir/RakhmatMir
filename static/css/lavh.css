@@ -84,26 +84,19 @@ body {
 .lavh-logo--hero {
   width: min(88px, 26vw);
   height: auto;
-  mix-blend-mode: lighten;
 }
 
 .lavh-logo--sidebar {
-  width: 56px;
+  width: 52px;
   height: auto;
   margin-bottom: 10px;
-  border-radius: 8px;
-  background: #0a0a0a;
-  padding: 6px;
 }
 
 .lavh-logo--footer {
-  width: 72px;
+  width: 64px;
   height: auto;
   margin-left: auto;
   margin-bottom: 4px;
-  border-radius: 6px;
-  background: #0a0a0a;
-  padding: 4px;
 }
 
 .auth-left h1 {
