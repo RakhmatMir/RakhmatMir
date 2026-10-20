@@ -1466,6 +1466,73 @@ body.lavh-app .lavh-breadcrumbs .crumb-link {
 
 .admin-roster-list {
   margin: 12px 0 0;
-  max-height: 220px;
-  overflow-y: auto;
+}
+
+.admin-roster-list .admin-roster-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--lavh-border);
+}
+
+.admin-roster-expand-wrap {
+  list-style: none;
+  padding: 8px 0 0;
+  border-bottom: none;
+}
+
+.admin-roster-expand {
+  width: 100%;
+  justify-content: center;
+}
+
+.admin-cred-fields {
+  margin-top: 4px;
+}
+
+.admin-field-with-btn {
+  min-width: 0;
+}
+
+.admin-input-actions {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.admin-input-actions input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-mini {
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.admin-cred-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.admin-credential-format-label {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+}
+
+.admin-credential-preview {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--lavh-radius-sm);
+  background: var(--lavh-blue-bg);
+  border: 1px solid color-mix(in srgb, var(--lavh-blue) 18%, var(--lavh-border));
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
 }
