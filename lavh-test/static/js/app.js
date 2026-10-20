@@ -97,21 +97,30 @@ function userInitials(user) {
   return n.slice(0, 2).toUpperCase();
 }
 
-function sidebarUserBlock(user) {
-  const name = displayName(user);
+const SETTINGS_ICON = `<svg class="sidebar-dock-settings-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96a7.02 7.02 0 0 0-1.63-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.63.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>`;
+
+function userAvatarMarkup(user, sizeClass = "") {
   const avatarUrl = getAvatarUrl(user?.id);
-  const avatarInner = avatarUrl
-    ? `<img class="sidebar-user-avatar-img" src="${avatarUrl}" alt="" />`
-    : `<span class="sidebar-user-initials" aria-hidden="true">${escapeHtml(userInitials(user))}</span>`;
-  const active = state.view === "profile" ? " is-active" : "";
+  if (avatarUrl) {
+    return `<img class="sidebar-user-avatar-img ${sizeClass}" src="${avatarUrl}" alt="" />`;
+  }
+  return `<span class="sidebar-user-initials ${sizeClass}" aria-hidden="true">${escapeHtml(userInitials(user))}</span>`;
+}
+
+function sidebarDockBlock(user) {
+  const name = displayName(user);
+  const profileActive = state.view === "profile" ? " is-active" : "";
+  const settingsActive = state.view === "settings" ? " is-active" : "";
   return `
-    <button type="button" class="sidebar-user${active}" id="sidebar-user-btn" aria-label="Профиль: ${escapeHtml(name)}">
-      <span class="sidebar-user-role">${escapeHtml(roleLabel())}</span>
-      <span class="sidebar-user-card">
-        <span class="sidebar-user-avatar">${avatarInner}</span>
-        <span class="sidebar-user-name">${escapeHtml(name)}</span>
-      </span>
-    </button>`;
+    <div class="sidebar-footer sidebar-dock">
+      <button type="button" class="sidebar-dock-profile${profileActive}" id="sidebar-user-btn" aria-label="Профиль: ${escapeHtml(name)}">
+        <span class="sidebar-user-avatar">${userAvatarMarkup(user)}</span>
+        <span class="sidebar-dock-name">${escapeHtml(name)}</span>
+      </button>
+      <button type="button" class="sidebar-dock-settings${settingsActive}" id="sidebar-settings-btn" aria-label="Настройки">
+        ${SETTINGS_ICON}
+      </button>
+    </div>`;
 }
 
 function navItems() {
@@ -305,7 +314,32 @@ async function renderMainContent() {
   if (v === "admin-home") return renderAdminHome();
   if (v === "classes") return renderAdminClasses();
   if (v === "profile") return renderProfile();
+  if (v === "settings") return renderSettings();
   return `<p class="muted">Раздел в разработке</p>`;
+}
+
+function renderSettings() {
+  return `
+    <div class="lavh-card settings-card">
+      <h3>Настройки</h3>
+      <p class="muted">Дополнительные параметры аккаунта и интерфейса.</p>
+      <ul class="settings-list">
+        <li><button type="button" class="settings-row" id="settings-open-profile">Профиль и фото</button></li>
+        <li><button type="button" class="settings-row" disabled>Язык интерфейса (скоро)</button></li>
+        <li><button type="button" class="settings-row" disabled>Уведомления Telegram (скоро)</button></li>
+        <li><button type="button" class="settings-row" disabled>Подписка и биллинг (скоро)</button></li>
+      </ul>
+      <p class="muted settings-note">Выход из аккаунта временно здесь — позже перенесём в другое место.</p>
+      <button type="button" class="btn-secondary settings-logout" id="btn-logout">Выйти из аккаунта</button>
+    </div>`;
+}
+
+function bindSettings() {
+  document.getElementById("settings-open-profile")?.addEventListener("click", () => switchView("profile"));
+  document.getElementById("btn-logout")?.addEventListener("click", () => {
+    setMobileNavOpen(false);
+    logout();
+  });
 }
 
 function renderProfile() {
@@ -742,6 +776,7 @@ const VIEW_TITLES = {
   "admin-home": ["Администратор", "Управление школой"],
   classes: ["Классы и предметы", "Редактирование структуры"],
   profile: ["Профиль", "Ваши данные в системе"],
+  settings: ["Настройки", "Параметры аккаунта"],
 };
 
 async function renderShell() {
@@ -759,16 +794,15 @@ async function renderShell() {
           <div class="logo">LAVH TEST</div>
           <small>Educational technology</small>
         </div>
-        ${user ? sidebarUserBlock(user) : ""}
+        <nav class="sidebar-nav">
         ${navItems()
           .map(
             (item) =>
               `<button type="button" class="nav-btn ${state.view === item.id ? "active" : ""}" data-view="${item.id}"><span class="nav-dot"></span>${escapeHtml(item.label)}</button>`
           )
           .join("")}
-        <div class="sidebar-footer">
-          <button type="button" class="btn-ghost-light" id="btn-logout">Выйти</button>
-        </div>
+        </nav>
+        ${user ? sidebarDockBlock(user) : ""}
       </aside>
       <main class="main">
         <div class="main-topbar">
@@ -810,17 +844,17 @@ async function renderShell() {
   document.getElementById("sidebar-user-btn")?.addEventListener("click", () => {
     switchView("profile");
   });
+  document.getElementById("sidebar-settings-btn")?.addEventListener("click", () => {
+    switchView("settings");
+  });
 
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
-  document.getElementById("btn-logout")?.addEventListener("click", () => {
-    setMobileNavOpen(false);
-    logout();
-  });
   bindTestList();
   bindExam();
   bindProfile();
+  bindSettings();
   document.getElementById("btn-details")?.addEventListener("click", () => alert("В полной версии — окно с ответами по каждому вопросу."));
 }
 
