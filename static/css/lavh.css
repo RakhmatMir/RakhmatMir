@@ -568,6 +568,15 @@ body.nav-drawer-open {
   margin-bottom: 20px;
 }
 
+.profile-card .profile-head--plain {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.profile-card .profile-head--plain h3 {
+  margin: 0 0 6px;
+}
+
 .profile-avatar-wrap {
   width: 72px;
   height: 72px;

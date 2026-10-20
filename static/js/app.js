@@ -13,7 +13,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=38";
+} from "./portal-data.js?v=39";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +21,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=38";
+} from "./portal-app.js?v=39";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -182,7 +182,6 @@ function sidebarDockBlock(user) {
   return `
     <div class="sidebar-footer sidebar-dock">
       <button type="button" class="sidebar-dock-profile${profileActive}" id="sidebar-user-btn" aria-label="Профиль: ${escapeHtml(name)}">
-        <span class="sidebar-user-avatar">${userAvatarMarkup(user)}</span>
         <span class="sidebar-dock-name">${escapeHtml(name)}</span>
       </button>
       <button type="button" class="sidebar-dock-settings${settingsActive}" id="sidebar-settings-btn" aria-label="Настройки">
@@ -563,7 +562,7 @@ function renderSettings() {
       <h3>Настройки</h3>
       <p class="muted">Дополнительные параметры аккаунта и интерфейса.</p>
       <ul class="settings-list">
-        <li><button type="button" class="settings-row" id="settings-open-profile">Профиль и фото</button></li>
+        <li><button type="button" class="settings-row" id="settings-open-profile">Профиль</button></li>
         <li><button type="button" class="settings-row" disabled>Язык интерфейса (скоро)</button></li>
         <li><button type="button" class="settings-row" disabled>Уведомления Telegram (скоро)</button></li>
         <li><button type="button" class="settings-row" disabled>Подписка и биллинг (скоро)</button></li>
@@ -601,43 +600,20 @@ function renderProfile() {
     rows.push(["Регистрация", new Date(reg.created_at).toLocaleDateString("ru-RU")]);
   }
 
-  const avatarPreview = avatarUrl
-    ? `<img class="profile-avatar-img" src="${avatarUrl}" alt="" />`
-    : `<span class="profile-avatar-initials">${escapeHtml(userInitials(user))}</span>`;
-
   return `
     <div class="lavh-card profile-card">
-      <div class="profile-head">
-        <div class="profile-avatar-wrap">${avatarPreview}</div>
-        <div>
-          <h3>${escapeHtml(displayName(user))}</h3>
-          <p class="muted">@${escapeHtml(user.login)} · ${escapeHtml(roleLabel())}</p>
-        </div>
+      <div class="profile-head profile-head--plain">
+        <h3>${escapeHtml(displayName(user))}</h3>
+        <p class="muted">@${escapeHtml(user.login)} · ${escapeHtml(roleLabel())}</p>
       </div>
       <dl class="profile-dl">
         ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}
       </dl>
-      <label class="field profile-upload">
-        <span>Фото профиля (локально, до сервера)</span>
-        <input type="file" id="profile-avatar-input" accept="image/*" />
-      </label>
     </div>`;
 }
 
 function bindProfile() {
-  const input = document.getElementById("profile-avatar-input");
-  if (!input) return;
-  input.addEventListener("change", () => {
-    const file = input.files?.[0];
-    const user = state.session?.user;
-    if (!file || !user) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarUrl(user.id, String(reader.result));
-      renderShell();
-    };
-    reader.readAsDataURL(file);
-  });
+  /* без загрузки фото */
 }
 
 function previewStripStudent() {

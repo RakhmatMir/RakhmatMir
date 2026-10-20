@@ -2592,7 +2592,6 @@ async function renderAdminOverviewPage(main, session) {
     ${retentionBanner}
     ${renderNotifyRecipientsPanel()}
     <div class="panel">
-      <h3>${escapeHtml(session?.user?.full_name || "Администратор")}</h3>
       <p class="lead">${school} · выберите раздел в меню слева: классы, контрольные, статистика.</p>
     </div>`;
   bindNotifyRecipients(main);
@@ -2738,8 +2737,7 @@ async function renderAdminTeacherOverviewPage(main, session) {
   main.innerHTML = `
     ${retentionBanner}
     <div class="panel">
-      <h3>Кабинет учителя</h3>
-      <p class="lead">${escapeHtml(session?.school_name || "")} · ${escapeHtml(session?.user?.full_name || "")}</p>
+      <p class="lead">${escapeHtml(session?.school_name || "")}</p>
       <p class="muted">Слева: <strong>Контрольные</strong> — проверка и настройка, <strong>Статистика класса</strong> — таблица учеников, <strong>Ошибки</strong> — проблемные вопросы.</p>
     </div>`;
   updateBreadcrumbs();
@@ -3714,13 +3712,6 @@ async function renderStudentFlow() {
       : "";
     if (portalState.githubSyncWarning) portalState.githubSyncWarning = false;
 
-    const introPanel = `
-      <div class="panel">
-        <h3>${escapeHtml(u.full_name)}</h3>
-        <p class="lead">${escapeHtml(session.school_name)} · класс ${escapeHtml(data.class_name)}</p>
-        ${syncNote}
-      </div>`;
-
     const progressPanel = `
       <div class="panel">
         <h3>Отслеживание прогресса</h3>
@@ -3744,15 +3735,15 @@ async function renderStudentFlow() {
         <div class="stat-card purple"><span class="muted" style="color:rgba(255,255,255,.85)">Школа</span><div class="big" style="font-size:1rem">${escapeHtml(session.school_name)}</div><small>LAVH TEST</small></div>
       </div>`;
 
-    let body = introPanel;
+    let body = syncNote;
     if (section === "tests") {
-      body = `${introPanel}${renderStudentExamBundlePanel(bundle)}`;
+      body = `${syncNote}${renderStudentExamBundlePanel(bundle)}`;
     } else if (section === "results") {
-      body = `${introPanel}${renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore)}`;
+      body = `${syncNote}${renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore)}`;
     } else if (section === "progress") {
-      body = `${introPanel}${progressPanel}`;
+      body = `${syncNote}${progressPanel}`;
     } else {
-      body = `${introPanel}${overviewStats}<p class="muted lavh-section-hint">Разделы слева: <strong>Мои тесты</strong>, <strong>Результаты</strong>, <strong>Прогресс</strong>.</p>`;
+      body = `${syncNote}${overviewStats}<p class="muted lavh-section-hint">Разделы слева: <strong>Мои тесты</strong>, <strong>Результаты</strong>, <strong>Прогресс</strong>.</p>`;
     }
 
     main.innerHTML = body;
