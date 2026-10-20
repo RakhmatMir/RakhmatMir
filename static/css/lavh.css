@@ -359,6 +359,8 @@ body.nav-drawer-open {
   padding: 4px 4px 16px;
   margin-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: visible;
 }
 
 .sidebar-brand {
@@ -779,14 +781,18 @@ body.nav-drawer-open {
     width: 72px;
   }
 
+  .sidebar {
+    overflow: visible;
+  }
+
   .sidebar-close {
     display: flex;
     align-items: center;
     justify-content: center;
     position: absolute;
-    top: 22px;
     right: 0;
-    transform: translateX(50%);
+    bottom: 0;
+    transform: translate(50%, 50%);
     width: auto;
     height: auto;
     margin: 0;
@@ -798,16 +804,15 @@ body.nav-drawer-open {
     color: #fff;
     cursor: pointer;
     z-index: 920;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
   }
 
   .sidebar-close:hover {
-    color: rgba(255, 255, 255, 0.92);
-    opacity: 0.9;
+    opacity: 0.88;
   }
 
   .sidebar-brand {
-    padding-right: 8px;
+    padding-right: 12px;
   }
 
   .nav-toggle {
