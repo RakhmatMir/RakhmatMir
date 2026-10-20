@@ -1,0 +1,163 @@
+{
+  "school_name": "Тестовая школа LAVH",
+  "classes": [
+    {
+      "class_name": "5А",
+      "student_count": 4,
+      "test_count": 1
+    }
+  ],
+  "class_schedules": {
+    "5А": {
+      "total_minutes": 30,
+      "bundle_published": true
+    }
+  },
+  "submissions_reset_generation": 1,
+  "submissions_retention_hours": 24,
+  "submissions_upload": {
+    "enabled": false,
+    "github_token": ""
+  },
+  "cleared_student_ids": [],
+  "subjects": [
+    {
+      "code": "math",
+      "title": "Математика",
+      "test_count": 1
+    }
+  ],
+  "exams": [
+    {
+      "id": 201,
+      "class_name": "5А",
+      "subject_code": "math",
+      "subject_title": "Математика",
+      "title": "Математика 5А (тест LAVH)",
+      "control_date": "07.10.2026",
+      "duration_minutes": 30,
+      "kind_label": "Тест",
+      "phase": "active",
+      "catalog_key": "todo",
+      "requires_teacher_publish": false,
+      "published_to_students": true,
+      "question_count": 4,
+      "questions": [
+        {
+          "text": "Значение выражения 18 - 3·4 + 2:",
+          "options": [
+            "32",
+            "8",
+            "20",
+            "12"
+          ],
+          "correct_index": 1
+        },
+        {
+          "text": "Какое число является делителем 48?",
+          "options": [
+            "14",
+            "8",
+            "9",
+            "7"
+          ],
+          "correct_index": 1
+        },
+        {
+          "text": "Найдите сумму: -12 + 5",
+          "options": [
+            "-17",
+            "-7",
+            "7",
+            "17"
+          ],
+          "correct_index": 1
+        },
+        {
+          "text": "Какое из чисел является простым?",
+          "options": [
+            "19",
+            "21",
+            "25",
+            "27"
+          ],
+          "correct_index": 0
+        }
+      ]
+    }
+  ],
+  "demo_users": [
+    {
+      "id": 1,
+      "login": "admin",
+      "password": "admin123",
+      "full_name": "Админ тестовой школы",
+      "role": "admin",
+      "class_name": null
+    },
+    {
+      "id": 501,
+      "login": "5a01",
+      "password": "5a01-501",
+      "full_name": "Тестов Умид",
+      "role": "student",
+      "class_name": "5А"
+    },
+    {
+      "id": 502,
+      "login": "5a02",
+      "password": "5a02-502",
+      "full_name": "Тестова Дила",
+      "role": "student",
+      "class_name": "5А"
+    },
+    {
+      "id": 503,
+      "login": "5a03",
+      "password": "5a03-503",
+      "full_name": "Тестов Бек",
+      "role": "student",
+      "class_name": "5А"
+    },
+    {
+      "id": 504,
+      "login": "5a04",
+      "password": "5a04-504",
+      "full_name": "Тестова Нигора",
+      "role": "student",
+      "class_name": "5А"
+    }
+  ],
+  "demo_exam_answers": {},
+  "demo_question_times": {},
+  "demo_question_exit_counts": {},
+  "demo_question_away_seconds": {},
+  "rosters": {
+    "5А": [
+      {
+        "id": 501,
+        "full_name": "Тестов Умид",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 502,
+        "full_name": "Тестова Дила",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 503,
+        "full_name": "Тестов Бек",
+        "status": "not_started",
+        "score_percent": null
+      },
+      {
+        "id": 504,
+        "full_name": "Тестова Нигора",
+        "status": "not_started",
+        "score_percent": null
+      }
+    ]
+  }
+}

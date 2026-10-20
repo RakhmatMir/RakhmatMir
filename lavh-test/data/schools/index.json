@@ -1,0 +1,14 @@
+{
+  "schools": [
+    {
+      "code": "foundation",
+      "name": "Foundation School — демо",
+      "description": "Полная демо-школа с классом 6Б (как на рабочем портале)"
+    },
+    {
+      "code": "lavh-demo",
+      "name": "Тестовая школа LAVH",
+      "description": "Укороченный набор для проверки мультитенантности"
+    }
+  ]
+}

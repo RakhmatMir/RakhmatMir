@@ -8,9 +8,63 @@ const TEACHER_REPORTS_KEY = "portal_site_teacher_reports_v1";
 const EXAM_DRAFTS_KEY = "portal_exam_drafts_v2";
 const EXAM_SCHEDULE_KEY = "portal_exam_schedule_v1";
 const DEMO_SESSION_KEY = "portal_demo_session_v1";
+const ACTIVE_SCHOOL_SESSION_KEY = "lavh_active_school_v1";
 const BUNDLE_SUBJECT_ORDER = ["math", "russian", "english"];
 
-let bundlePromise = null;
+const bundlePromises = new Map();
+let schoolsIndexPromise = null;
+
+export function getActiveSchoolCode() {
+  if (window.portalState?.schoolCode) {
+    return String(window.portalState.schoolCode).trim().toLowerCase();
+  }
+  try {
+    return String(sessionStorage.getItem(ACTIVE_SCHOOL_SESSION_KEY) || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function setActiveSchoolCode(code) {
+  const c = String(code || "").trim().toLowerCase();
+  if (!c) throw new Error("school_required");
+  try {
+    sessionStorage.setItem(ACTIVE_SCHOOL_SESSION_KEY, c);
+  } catch {
+    /* ignore */
+  }
+  if (window.portalState) window.portalState.schoolCode = c;
+}
+
+function scopedStorageKey(base) {
+  const sc = getActiveSchoolCode();
+  return sc ? `${base}::${sc}` : base;
+}
+
+export async function loadSchoolsIndex() {
+  if (!schoolsIndexPromise) {
+    schoolsIndexPromise = fetch(`${dataBasePath()}/schools/index.json?v=1`, { cache: "no-cache" })
+      .then((res) => (res.ok ? res.json() : { schools: [] }))
+      .catch(() => ({ schools: [] }));
+  }
+  return schoolsIndexPromise;
+}
+
+export async function schoolExists(code) {
+  const c = String(code || "").trim().toLowerCase();
+  if (!c) return false;
+  const idx = await loadSchoolsIndex();
+  if (idx.schools?.some((s) => s.code === c)) return true;
+  try {
+    const res = await fetch(
+      `${dataBasePath()}/schools/${encodeURIComponent(c)}/portal.json?v=1`,
+      { method: "GET", cache: "no-cache" }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 function dataBasePath() {
   return String(window.PORTAL_DATA_BASE || "data").replace(/\/$/, "");
@@ -46,16 +100,19 @@ function migrateLocalExamDraftsKey() {
   }
 }
 
-export function invalidatePortalBundleCache() {
-  bundlePromise = null;
+export function invalidatePortalBundleCache(schoolCode) {
+  if (schoolCode) bundlePromises.delete(String(schoolCode).trim().toLowerCase());
+  else bundlePromises.clear();
 }
 
 export async function loadPortalBundle(options = {}) {
   migrateLocalExamDraftsKey();
-  if (options.fresh) invalidatePortalBundleCache();
-  if (!bundlePromise) {
-    const url = `${dataBasePath()}/portal.json?v=106`;
-    bundlePromise = fetch(url, { cache: "no-cache" })
+  const schoolCode = String(options.schoolCode || getActiveSchoolCode() || "").trim().toLowerCase();
+  if (!schoolCode) throw new Error("school_required");
+  if (options.fresh) invalidatePortalBundleCache(schoolCode);
+  if (!bundlePromises.has(schoolCode)) {
+    const url = `${dataBasePath()}/schools/${encodeURIComponent(schoolCode)}/portal.json?v=107`;
+    const promise = fetch(url, { cache: "no-cache" })
       .then((res) => {
         if (!res.ok) throw new Error("portal_data_load_failed");
         return res.json();
@@ -65,13 +122,14 @@ export async function loadPortalBundle(options = {}) {
         enforceClearedStudents(bundle);
         return bundle;
       });
+    bundlePromises.set(schoolCode, promise);
   }
-  return bundlePromise;
+  return bundlePromises.get(schoolCode);
 }
 
 function loadSubmissions() {
   try {
-    const raw = localStorage.getItem(SUBMISSIONS_KEY);
+    const raw = localStorage.getItem(scopedStorageKey(SUBMISSIONS_KEY));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -117,13 +175,16 @@ export async function fetchLiveSubmissionsDocument() {
 
 /** Ученик: local + GitHub. Админ: только GitHub JSON (любой компьютер). */
 async function loadSubmissionsForApi(user) {
-  const remote = await fetchRemoteSubmissionsMap();
-  if (user?.role === "admin") return remote;
+  const schoolScoped = Boolean(getActiveSchoolCode());
+  const remote = schoolScoped ? {} : await fetchRemoteSubmissionsMap();
+  if (user?.role === "admin") {
+    return schoolScoped ? { ...loadSubmissions(), ...remote } : remote;
+  }
   return { ...loadSubmissions(), ...remote };
 }
 
 function saveSubmissions(map) {
-  localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(map));
+  localStorage.setItem(scopedStorageKey(SUBMISSIONS_KEY), JSON.stringify(map));
 }
 
 /**
@@ -135,15 +196,15 @@ function enforceSubmissionsReset(bundle) {
   if (!generation) return;
   let ack = 0;
   try {
-    ack = Number(localStorage.getItem(SUBMISSIONS_RESET_ACK_KEY)) || 0;
+    ack = Number(localStorage.getItem(scopedStorageKey(SUBMISSIONS_RESET_ACK_KEY))) || 0;
   } catch {
     /* ignore */
   }
   if (ack >= generation) return;
   try {
-    localStorage.removeItem(SUBMISSIONS_KEY);
-    localStorage.removeItem(SUBMISSIONS_SYNC_FP_KEY);
-    localStorage.setItem(SUBMISSIONS_RESET_ACK_KEY, String(generation));
+    localStorage.removeItem(scopedStorageKey(SUBMISSIONS_KEY));
+    localStorage.removeItem(scopedStorageKey(SUBMISSIONS_SYNC_FP_KEY));
+    localStorage.setItem(scopedStorageKey(SUBMISSIONS_RESET_ACK_KEY), String(generation));
   } catch {
     /* ignore */
   }
@@ -199,7 +260,7 @@ function getSubmission(map, examId, userId) {
 
 function loadTeacherReports() {
   try {
-    const raw = localStorage.getItem(TEACHER_REPORTS_KEY);
+    const raw = localStorage.getItem(scopedStorageKey(TEACHER_REPORTS_KEY));
     const arr = raw ? JSON.parse(raw) : [];
     return new Set(Array.isArray(arr) ? arr : []);
   } catch {
@@ -208,12 +269,12 @@ function loadTeacherReports() {
 }
 
 function saveTeacherReports(set) {
-  localStorage.setItem(TEACHER_REPORTS_KEY, JSON.stringify([...set]));
+  localStorage.setItem(scopedStorageKey(TEACHER_REPORTS_KEY), JSON.stringify([...set]));
 }
 
 function loadExamDrafts() {
   try {
-    const raw = localStorage.getItem(EXAM_DRAFTS_KEY);
+    const raw = localStorage.getItem(scopedStorageKey(EXAM_DRAFTS_KEY));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -221,7 +282,7 @@ function loadExamDrafts() {
 }
 
 function saveExamDrafts(map) {
-  localStorage.setItem(EXAM_DRAFTS_KEY, JSON.stringify(map));
+  localStorage.setItem(scopedStorageKey(EXAM_DRAFTS_KEY), JSON.stringify(map));
 }
 
 function getExamDraft(examId) {
@@ -230,7 +291,7 @@ function getExamDraft(examId) {
 
 function loadExamSchedules() {
   try {
-    const raw = localStorage.getItem(EXAM_SCHEDULE_KEY);
+    const raw = localStorage.getItem(scopedStorageKey(EXAM_SCHEDULE_KEY));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -238,7 +299,7 @@ function loadExamSchedules() {
 }
 
 function saveExamSchedules(map) {
-  localStorage.setItem(EXAM_SCHEDULE_KEY, JSON.stringify(map));
+  localStorage.setItem(scopedStorageKey(EXAM_SCHEDULE_KEY), JSON.stringify(map));
 }
 
 function defaultClassExamSchedule() {
@@ -791,6 +852,14 @@ function publicUser(row) {
   };
 }
 
+/** Сохранить сессию (школьный или публичный вход) для восстановления после F5. */
+export function persistDemoSession(session) {
+  if (!session?.user) return;
+  const schoolCode = session.school_code || getActiveSchoolCode();
+  if (schoolCode) session.school_code = schoolCode;
+  localStorage.setItem(scopedStorageKey(DEMO_SESSION_KEY), JSON.stringify(session));
+}
+
 /** Демо-вход из portal.json. Пароли открыты — только для показа. */
 export async function demoAuthApi(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
@@ -805,19 +874,29 @@ export async function demoAuthApi(path, options = {}) {
       (u) => u.login.toLowerCase() === login.toLowerCase() && u.password === password
     );
     if (!found) throw new Error("invalid_credentials");
-    const session = { user: publicUser(found), school_name: bundle.school_name };
-    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+    const schoolCode = getActiveSchoolCode();
+    const session = {
+      user: publicUser(found),
+      school_name: bundle.school_name,
+      school_code: schoolCode,
+    };
+    localStorage.setItem(scopedStorageKey(DEMO_SESSION_KEY), JSON.stringify(session));
     return session;
   }
 
   if (path === "/api/me" && method === "GET") {
-    const raw = localStorage.getItem(DEMO_SESSION_KEY);
+    const raw = localStorage.getItem(scopedStorageKey(DEMO_SESSION_KEY));
     if (!raw) throw new Error("not_authenticated");
-    return JSON.parse(raw);
+    const session = JSON.parse(raw);
+    const active = getActiveSchoolCode();
+    if (session.school_code && active && session.school_code !== active) {
+      throw new Error("not_authenticated");
+    }
+    return session;
   }
 
   if (path === "/api/logout" && method === "POST") {
-    localStorage.removeItem(DEMO_SESSION_KEY);
+    localStorage.removeItem(scopedStorageKey(DEMO_SESSION_KEY));
     return { status: "ok" };
   }
 
