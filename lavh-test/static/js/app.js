@@ -13,7 +13,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=33";
+} from "./portal-data.js?v=34";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +21,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=33";
+} from "./portal-app.js?v=34";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -79,15 +79,16 @@ const VIEWS = {
     { id: "progress", label: "Прогресс", icon: "◆" },
   ],
   teacher: [
-    { id: "teacher-home", label: "Кабинет учителя", icon: "◆" },
-    { id: "editor", label: "Редактор теста", icon: "◆" },
+    { id: "teacher-home", label: "Обзор", icon: "◆" },
+    { id: "staff-tests", label: "Контрольные", icon: "◆" },
     { id: "class-stats", label: "Статистика класса", icon: "◆" },
-    { id: "errors", label: "Агрегация ошибок", icon: "◆" },
+    { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
   ],
   admin: [
-    { id: "admin-home", label: "Администрирование", icon: "◆" },
+    { id: "admin-home", label: "Обзор", icon: "◆" },
     { id: "classes", label: "Классы", icon: "◆" },
-    { id: "teacher-home", label: "Аналитика (учитель)", icon: "◆" },
+    { id: "staff-tests", label: "Контрольные", icon: "◆" },
+    { id: "class-stats", label: "Статистика класса", icon: "◆" },
     { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
   ],
 };
@@ -196,6 +197,72 @@ function navItems() {
   return VIEWS.student;
 }
 
+function isNavItemActive(itemId) {
+  const v = state.view;
+  if (itemId === v) return true;
+  if (itemId === "classes" && ["admin-class", "admin-subject", "admin-exam"].includes(v)) {
+    return !portalState.staffTestsShortcut;
+  }
+  if (itemId === "staff-tests") {
+    return v === "staff-tests" || (v === "admin-exam" && portalState.staffTestsShortcut);
+  }
+  if (itemId === "tests" && portalState.adminView === "exam" && state.uiMode === "student") {
+    return true;
+  }
+  return false;
+}
+
+function updateShellChrome() {
+  const [title, sub] = VIEW_TITLES[state.view] || VIEW_TITLES[portalState.shellView] || ["LAVH TEST", ""];
+  const h1 = document.querySelector(".main-header h1");
+  const lead = document.querySelector(".main-header p");
+  if (h1) h1.textContent = title;
+  if (lead) lead.textContent = sub;
+  document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
+    btn.classList.toggle("active", isNavItemActive(btn.dataset.view));
+  });
+  const user = state.session?.user;
+  if (user) {
+    document
+      .getElementById("sidebar-user-btn")
+      ?.classList.toggle("is-active", state.view === "profile");
+    document
+      .getElementById("sidebar-settings-btn")
+      ?.classList.toggle("is-active", state.view === "settings");
+  }
+}
+
+window.__lavhShellNavigate = async (viewId, adminNav = {}) => {
+  if (viewId === "admin-class") {
+    state.adminNav = {
+      className: adminNav.className,
+      subjectCode: null,
+      examId: null,
+    };
+  } else if (viewId === "admin-subject") {
+    state.adminNav = {
+      className: adminNav.className ?? state.adminNav.className,
+      subjectCode: adminNav.subjectCode,
+      examId: null,
+    };
+  } else if (viewId === "admin-exam") {
+    state.adminNav = {
+      className: adminNav.className ?? state.adminNav.className,
+      subjectCode: adminNav.subjectCode ?? state.adminNav.subjectCode,
+      examId: adminNav.examId ?? state.adminNav.examId,
+    };
+  } else {
+    state.adminNav = { className: null, subjectCode: null, examId: null };
+  }
+  state.view = viewId;
+  setMobileNavOpen(false);
+  lavhSyncPortalNavFromLavhView(viewId, state.adminNav);
+  if (document.querySelector(".shell")) {
+    updateShellChrome();
+    await refreshPortalMain();
+  }
+};
+
 function setMobileNavOpen(open) {
   document.querySelector(".shell")?.classList.toggle("nav-open", open);
   document.body.classList.toggle("nav-drawer-open", open);
@@ -203,8 +270,20 @@ function setMobileNavOpen(open) {
 
 async function switchView(id) {
   if (state.view === id || state.leaving) return;
-  if (id === "admin-home") {
+  if (
+    id === "admin-home" ||
+    id === "classes" ||
+    id === "staff-tests" ||
+    id === "class-stats" ||
+    id === "errors" ||
+    id === "teacher-home" ||
+    id === "home" ||
+    id === "tests" ||
+    id === "results" ||
+    id === "progress"
+  ) {
     state.adminNav = { className: null, subjectCode: null, examId: null };
+    portalState.staffTestsShortcut = false;
   }
   setMobileNavOpen(false);
   state.leaving = true;
@@ -292,11 +371,15 @@ async function refreshPortalMain() {
 
   if (!portalDashboardBooted) {
     portalDashboardBooted = true;
-    await lavhRenderPortalDashboard(state.session);
+    await lavhRenderPortalDashboard(state.session, state.view);
     return;
   }
 
   lavhSyncPortalNavFromLavhView(state.view, state.adminNav);
+  if (state.session?.user?.role === "student" && portalState.adminView === "exam") {
+    state.view = "tests";
+    updateShellChrome();
+  }
   const role = state.session?.user?.role;
   if (role === "admin" || state.uiMode === "teacher") {
     await renderAdminFlow();
@@ -1219,11 +1302,12 @@ const VIEW_TITLES = {
   editor: ["Редактор", "Вопросы теста"],
   "class-stats": ["Статистика класса", "Ученики и баллы"],
   errors: ["Агрегация ошибок", "Диагностика усвоения"],
-  "admin-home": ["Администратор", "Управление школой"],
+  "admin-home": ["Обзор", "Школа и уведомления"],
   "admin-class": ["Класс", "Предметы и публикация тестов"],
   "admin-subject": ["Предмет", "Контрольные работы"],
   "admin-exam": ["Контрольная", "Статистика и вопросы"],
-  classes: ["Классы", "Список классов школы"],
+  classes: ["Классы", "Список классов и переход к предметам"],
+  "staff-tests": ["Контрольные", "Сдача, проверка и настройка тестов"],
   profile: ["Профиль", "Ваши данные в системе"],
   settings: ["Настройки", "Параметры аккаунта"],
 };
@@ -1254,7 +1338,7 @@ async function renderShell() {
         ${navItems()
           .map(
             (item) =>
-              `<button type="button" class="nav-btn ${state.view === item.id ? "active" : ""}" data-view="${item.id}"><span class="nav-dot"></span>${escapeHtml(item.label)}</button>`
+              `<button type="button" class="nav-btn ${isNavItemActive(item.id) ? "active" : ""}" data-view="${item.id}"><span class="nav-dot"></span>${escapeHtml(item.label)}</button>`
           )
           .join("")}
         </nav>

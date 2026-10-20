@@ -696,6 +696,14 @@ body.nav-drawer-open {
   min-height: 420px;
 }
 
+.lavh-section-hint {
+  margin-top: 16px;
+}
+
+.lavh-student-overview-grid {
+  margin-top: 16px;
+}
+
 .main-panel {
   animation: panel-in var(--transition) both;
 }
