@@ -13,7 +13,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js";
+} from "./portal-data.js?v=33";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +21,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js";
+} from "./portal-app.js?v=33";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
