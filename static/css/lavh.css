@@ -1238,3 +1238,159 @@ table.data-table tr:nth-child(even) td {
   background: var(--lavh-blue-bg);
   color: var(--lavh-blue-deep);
 }
+
+/* —— Portal content inside LAVH shell (original LAVH palette + cards) —— */
+body.lavh-app .portal-host {
+  --accent: var(--lavh-blue);
+  --accent-hover: var(--lavh-blue-deep);
+  --card: var(--lavh-surface);
+  --text: var(--lavh-text);
+  --muted: var(--lavh-muted);
+  --border: var(--lavh-border);
+  --stat-bg: var(--lavh-blue-bg);
+  --ghost-hover: var(--lavh-blue-bg);
+  --row-hover: #e3ebff;
+  --badge-bg: var(--lavh-blue-bg);
+  --badge-text: var(--lavh-blue-deep);
+  --radius: var(--lavh-radius);
+  --shadow: var(--lavh-shadow);
+  font-family: "Manrope", system-ui, sans-serif;
+  color: var(--lavh-text);
+}
+
+body.lavh-app .portal-host .panel {
+  background: var(--lavh-surface);
+  border: 1px solid color-mix(in srgb, var(--lavh-blue) 14%, var(--lavh-border));
+  border-radius: var(--lavh-radius);
+  box-shadow: var(--lavh-shadow);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  transition:
+    transform 0.28s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+}
+
+body.lavh-app .portal-host .panel:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--lavh-shadow-hover);
+  border-color: color-mix(in srgb, var(--lavh-blue) 28%, var(--lavh-border));
+}
+
+body.lavh-app .portal-host .panel-collapse:hover,
+body.lavh-app .portal-host .panel-staff-tests:hover,
+body.lavh-app .portal-host .panel-notify:hover {
+  transform: none;
+}
+
+body.lavh-app .portal-host .panel h3,
+body.lavh-app .portal-host .class-detail-title {
+  color: var(--lavh-text);
+  font-weight: 800;
+}
+
+body.lavh-app .portal-host .btn-primary {
+  background: linear-gradient(135deg, var(--lavh-blue), var(--lavh-blue-deep));
+  border-radius: var(--lavh-radius-sm);
+  font-family: inherit;
+  box-shadow: 0 8px 22px rgba(74, 105, 226, 0.28);
+}
+
+body.lavh-app .portal-host .btn-primary:hover {
+  background: linear-gradient(135deg, #5574ea, var(--lavh-blue-deep));
+}
+
+body.lavh-app .portal-host .btn-secondary,
+body.lavh-app .portal-host .btn-ghost {
+  border-radius: var(--lavh-radius-sm);
+  font-family: inherit;
+}
+
+body.lavh-app .portal-host .btn-ghost:hover {
+  background: var(--lavh-blue-bg);
+  color: var(--lavh-blue-deep);
+}
+
+body.lavh-app .portal-host .list-plain li.row-link {
+  border-radius: var(--lavh-radius-sm);
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    transform 0.22s ease;
+}
+
+body.lavh-app .portal-host .list-plain li.row-link:hover {
+  background: var(--lavh-blue-bg);
+  border-color: color-mix(in srgb, var(--lavh-blue) 22%, transparent);
+  transform: translateX(3px);
+}
+
+body.lavh-app .portal-host .staff-tests-pool {
+  border-radius: var(--lavh-radius-sm);
+  background: color-mix(in srgb, var(--lavh-blue-bg) 35%, #fff);
+}
+
+body.lavh-app .portal-host .staff-tests-pool--active {
+  border-left-color: var(--lavh-blue);
+  background: color-mix(in srgb, var(--lavh-blue-bg) 55%, #fff);
+}
+
+body.lavh-app .portal-host .staff-tests-pool--done {
+  border-left-color: #16a34a;
+  background: color-mix(in srgb, #dcfce7 45%, #fff);
+}
+
+body.lavh-app .portal-host .staff-tests-pool--active .staff-tests-pool-badge {
+  background: color-mix(in srgb, var(--lavh-blue) 12%, #fff);
+  color: var(--lavh-blue-deep);
+  border-color: color-mix(in srgb, var(--lavh-blue) 25%, var(--lavh-border));
+}
+
+body.lavh-app .portal-host .metric-cell {
+  background: var(--lavh-blue-bg);
+  border-radius: var(--lavh-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--lavh-blue) 12%, transparent);
+}
+
+body.lavh-app .portal-host .metric-value {
+  color: var(--lavh-blue-deep);
+}
+
+body.lavh-app .portal-host .data-table th {
+  background: linear-gradient(135deg, var(--lavh-blue), var(--lavh-blue-deep));
+  color: #fff;
+  font-weight: 700;
+}
+
+body.lavh-app .portal-host .data-table tbody tr:hover td {
+  background: var(--lavh-blue-bg);
+}
+
+body.lavh-app .portal-host .tag {
+  background: var(--lavh-blue-bg);
+  color: var(--lavh-blue-deep);
+}
+
+body.lavh-app .portal-host .panel-muted-inline {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--lavh-blue-bg) 80%, #fff), #fff);
+  border-color: color-mix(in srgb, var(--lavh-blue) 20%, var(--lavh-border));
+}
+
+body.lavh-app .portal-host .student-result-card.panel-collapse.is-open {
+  border-color: color-mix(in srgb, var(--lavh-purple) 25%, var(--lavh-border));
+  box-shadow: var(--lavh-shadow-hover);
+}
+
+body.lavh-app .main-header h1 {
+  color: var(--lavh-text);
+}
+
+body.lavh-app .main-header p {
+  color: var(--lavh-muted);
+}
+
+body.lavh-app .lavh-breadcrumbs .crumb-link {
+  color: var(--lavh-blue-deep);
+}
