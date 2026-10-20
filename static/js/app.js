@@ -793,7 +793,6 @@ async function renderShell() {
             ${logoImg("sidebar")}
             <div class="sidebar-brand-text">
               <span class="logo">LAVH TEST</span>
-              <span class="brand-sep" aria-hidden="true">·</span>
               <small>Educational technology</small>
             </div>
           </div>
