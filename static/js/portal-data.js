@@ -207,12 +207,12 @@ export async function fetchLiveSubmissionsDocument() {
 
 /** Ученик: local + GitHub. Админ: только GitHub JSON (любой компьютер). */
 async function loadSubmissionsForApi(user) {
-  const schoolScoped = Boolean(getActiveSchoolCode());
-  const remote = schoolScoped ? {} : await fetchRemoteSubmissionsMap();
+  const remote = await fetchRemoteSubmissionsMap();
+  const local = loadSubmissions();
   if (user?.role === "admin") {
-    return schoolScoped ? { ...loadSubmissions(), ...remote } : remote;
+    return { ...remote, ...local };
   }
-  return { ...loadSubmissions(), ...remote };
+  return { ...local, ...remote };
 }
 
 function saveSubmissions(map) {
