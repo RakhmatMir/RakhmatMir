@@ -3542,25 +3542,22 @@ async function renderStudentExamPreview(main) {
       ${renderMetricColumns(headerCols)}
     </div>
     ${renderCollapsiblePanel({
-      title: showResults ? "Тест: ваши ответы на экране" : "Тест",
-      hint: `${questionCountLabel(ex)} вопросов — нажмите, чтобы развернуть`,
+      title: showResults ? "Мои ответы" : "Тест",
+      hint: showResults
+        ? `${questionCountLabel(ex)} вопросов · нажмите, чтобы развернуть`
+        : `${questionCountLabel(ex)} вопросов — нажмите, чтобы развернуть`,
+      hintHtml: showResults
+        ? renderMetricColumns([
+            { label: "Результат", value: `${reviewPreview.score_percent ?? ex.score_percent ?? "—"}%` },
+            { label: "Верно", value: `${summary.correct} из ${summary.total}` },
+            { label: "Ошибок", value: String(summary.wrong) },
+          ])
+        : null,
       open: showResults,
-      bodyHtml: testInner,
+      bodyHtml: showResults
+        ? `<div class="student-answers-combined">${testInner}<div class="student-answers-table-wrap">${answersBody}</div></div>`
+        : testInner,
     })}
-    ${
-      showResults
-        ? renderCollapsiblePanel({
-            title: "Мои ответы",
-            hintHtml: renderMetricColumns([
-              { label: "Результат", value: `${reviewPreview.score_percent ?? ex.score_percent ?? "—"}%` },
-              { label: "Верно", value: `${summary.correct} из ${summary.total}` },
-              { label: "Ошибок", value: String(summary.wrong) },
-            ]),
-            open: true,
-            bodyHtml: `<div class="panel panel-nested">${answersBody}</div>`,
-          })
-        : ""
-    }
   `;
   bindCollapsiblePanels(main);
   bindDemoTestPicks(main);
