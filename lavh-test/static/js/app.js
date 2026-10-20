@@ -330,7 +330,6 @@ async function renderAuth(options = {}) {
           </div>
         </aside>
       </div>
-      <div class="brand-footer">${logoImg("footer")}<span class="brand-footer-text">Educational Technology</span></div>
     </div>`;
 
   document.getElementById("login-form")?.addEventListener("submit", async (e) => {
