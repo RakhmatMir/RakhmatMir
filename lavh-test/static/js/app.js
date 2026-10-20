@@ -788,6 +788,9 @@ async function renderShell() {
     <div class="shell">
       <button type="button" class="nav-overlay" id="nav-overlay" aria-label="Закрыть меню" tabindex="-1"></button>
       <aside class="sidebar" id="app-sidebar">
+        <button type="button" class="sidebar-close" id="nav-close" aria-label="Закрыть меню">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
         <div class="sidebar-head">
           <div class="sidebar-brand">
             ${logoImg("sidebar")}
@@ -797,9 +800,6 @@ async function renderShell() {
               <small>Educational technology</small>
             </div>
           </div>
-          <button type="button" class="sidebar-close" id="nav-close" aria-label="Закрыть меню">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-          </button>
         </div>
         <nav class="sidebar-nav">
         ${navItems()
