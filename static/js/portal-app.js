@@ -157,6 +157,8 @@ const portalState = {
   openExamAsReview: false,
   studentExamReturnHome: false,
   staffTestsShortcut: false,
+  /** Раздел левого меню LAVH (admin-home, classes, staff-tests, …). */
+  shellView: "admin-home",
   /** Не открывать единственный тест сразу (кнопка «Назад» / крошки). */
   suppressSingleExamAutoload: false,
   classFinalized: false,
@@ -164,6 +166,14 @@ const portalState = {
   adminEventSource: null,
 };
 window.portalState = portalState;
+
+function shellNavigate(viewId, adminNav = {}) {
+  if (typeof window.__lavhShellNavigate === "function") {
+    void window.__lavhShellNavigate(viewId, adminNav);
+    return true;
+  }
+  return false;
+}
 
 const AUTH_API_PATHS = new Set(["/api/login", "/api/logout", "/api/me"]);
 
@@ -1670,9 +1680,11 @@ function navigateBackFromStudentExam(examMeta) {
   setTestTakingActive(false);
   if (portalState.studentExamReturnHome) {
     portalState.studentExamReturnHome = false;
-    portalState.adminView = "home";
     portalState.examId = null;
     portalState.examTitle = null;
+    if (shellNavigate("tests")) return;
+    portalState.adminView = "home";
+    portalState.shellView = "tests";
     renderStudentFlow();
     return;
   }
@@ -2210,6 +2222,15 @@ function bindStaffHomeTestsList(main, pools) {
     portalState.examId = t.id;
     portalState.examTitle = t.title || null;
     portalState.adminView = "exam";
+    if (
+      shellNavigate("admin-exam", {
+        className: t.class_name,
+        subjectCode: t.subject_code,
+        examId: t.id,
+      })
+    ) {
+      return;
+    }
     renderAdminFlow();
   });
 }
@@ -2386,10 +2407,29 @@ async function renderSubmissionsRetentionBanner() {
   </section>`;
 }
 
-async function renderAdminHome(main, session) {
+function isStaffTestCompletedRow(t) {
+  if (t.catalog_key === "done" || t.all_submitted) return true;
+  const total = Number(t.class_total) || 0;
+  const submitted = Number(t.submitted_count) || 0;
+  return total > 0 && submitted >= total;
+}
+
+async function renderAdminOverviewPage(main, session) {
   const retentionBanner = await renderSubmissionsRetentionBanner();
+  const school = escapeHtml(session?.school_name || "Школа");
+  main.innerHTML = `
+    ${retentionBanner}
+    ${renderNotifyRecipientsPanel()}
+    <div class="panel">
+      <h3>${escapeHtml(session?.user?.full_name || "Администратор")}</h3>
+      <p class="lead">${school} · выберите раздел в меню слева: классы, контрольные, статистика.</p>
+    </div>`;
+  bindNotifyRecipients(main);
+  updateBreadcrumbs();
+}
+
+async function renderAdminClassesPage(main) {
   const classes = await api("/api/portal/classes");
-  const staffTests = isStaffRole() ? await loadStaffTestsList() : [];
   const rows = classes.length
     ? classes
         .map(
@@ -2400,48 +2440,134 @@ async function renderAdminHome(main, session) {
         )
         .join("")
     : `<li><span class="muted">Нет классов — добавьте учеников с указанием класса</span></li>`;
-
-  const isStaffTestCompleted = (t) => {
-    if (t.catalog_key === "done" || t.all_submitted) return true;
-    const total = Number(t.class_total) || 0;
-    const submitted = Number(t.submitted_count) || 0;
-    return total > 0 && submitted >= total;
-  };
-  const doneTests = staffTests.filter((t) => t.catalog_key === "done" || isStaffTestCompleted(t));
-  const activeTests = staffTests.filter((t) => !doneTests.includes(t));
-  const staffTestPools = { done: doneTests, active: activeTests };
-
-  const testsPanel = isStaffRole()
-    ? `<div class="panel panel-staff-tests">
-      <h3>Контрольные</h3>
-      <p class="lead muted staff-tests-hint">Нажмите тест — откроется проверка и настройка.</p>
-      <div class="staff-tests-pools">
-        ${renderStaffTestsPool("active", "К сдаче", activeTests)}
-        ${renderStaffTestsPool("done", "Пройденные", doneTests)}
-      </div>
-    </div>`
-    : "";
   main.innerHTML = `
-    ${retentionBanner}
-    ${renderNotifyRecipientsPanel()}
     <div class="panel">
       <h3>Классы</h3>
+      <p class="lead muted">Нажмите класс — откроются предметы, время и публикация тестов.</p>
       <ul class="list-plain">${rows}</ul>
-    </div>
-    ${testsPanel}
-  `;
-  bindNotifyRecipients(main);
-  bindStaffHomeTestsList(main, staffTestPools);
+    </div>`;
   bindRowNav(main, "[data-class-name]", (el) => {
     portalState.staffTestsShortcut = false;
+    const className = decodeURIComponent(el.getAttribute("data-class-name"));
+    if (shellNavigate("admin-class", { className })) return;
     portalState.adminView = "class";
-    portalState.className = decodeURIComponent(el.getAttribute("data-class-name"));
+    portalState.className = className;
     portalState.subjectCode = null;
     portalState.examId = null;
     portalState.examTitle = null;
     renderAdminFlow();
   });
   updateBreadcrumbs();
+}
+
+async function renderAdminStaffTestsPage(main) {
+  if (!isStaffRole()) {
+    main.innerHTML = `<p class="muted">Раздел доступен учителю и администратору.</p>`;
+    updateBreadcrumbs();
+    return;
+  }
+  const staffTests = await loadStaffTestsList();
+  const doneTests = staffTests.filter((t) => t.catalog_key === "done" || isStaffTestCompletedRow(t));
+  const activeTests = staffTests.filter((t) => !doneTests.includes(t));
+  const staffTestPools = { done: doneTests, active: activeTests };
+  main.innerHTML = `
+    <div class="panel panel-staff-tests">
+      <h3>Контрольные</h3>
+      <p class="lead muted staff-tests-hint">Нажмите тест — откроется проверка и настройка.</p>
+      <div class="staff-tests-pools">
+        ${renderStaffTestsPool("active", "К сдаче", activeTests)}
+        ${renderStaffTestsPool("done", "Пройденные", doneTests)}
+      </div>
+    </div>`;
+  bindStaffHomeTestsList(main, staffTestPools);
+  updateBreadcrumbs();
+}
+
+async function renderAdminClassStatsPage(main) {
+  const examId = portalState.examId || 101;
+  let admin;
+  try {
+    admin = await api(`/api/portal/exams/${examId}/admin`);
+  } catch {
+    main.innerHTML = `<p class="error">Не удалось загрузить статистику класса.</p>`;
+    updateBreadcrumbs();
+    return;
+  }
+  const students = admin.students || [];
+  main.innerHTML = `
+    <div class="panel">
+      <h3>Статистика класса</h3>
+      <p class="lead muted">${escapeHtml(admin.exam?.title || "Контрольная")} · ${admin.submitted_count ?? 0} из ${admin.class_total ?? 0} сдали</p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Ученик</th><th>Статус</th><th>Балл</th><th>Время</th></tr></thead>
+          <tbody>
+            ${students
+              .map(
+                (s) =>
+                  `<tr><td>${escapeHtml(s.full_name)}</td><td>${escapeHtml(studentStatusLabel(s))}</td><td>${s.score_percent != null ? `${s.score_percent}%` : "—"}</td><td>${escapeHtml(s.duration_label || "—")}</td></tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  updateBreadcrumbs();
+}
+
+async function renderAdminErrorsPage(main) {
+  const examId = 101;
+  let admin;
+  try {
+    admin = await api(`/api/portal/exams/${examId}/admin`);
+  } catch {
+    admin = { question_stats: [], problem_questions: [] };
+  }
+  const stats = admin.question_stats || [];
+  const rows = stats.length
+    ? stats.map((st, i) => ({
+        q: `Вопрос ${i + 1}`,
+        err: `${st.failed_percent ?? 0}%`,
+        time: st.avg_time_label || "—",
+        exit: st.question_exit_label || "нет",
+      }))
+    : [];
+  main.innerHTML = `
+    <div class="panel">
+      <h3>Ошибки по вопросам</h3>
+      <p class="lead muted">Доля ошибок среди учеников, которые сдали работу</p>
+      ${
+        rows.length
+          ? `<table class="data-table">
+        <thead><tr><th>Вопрос</th><th>Ошибки</th><th>Среднее время</th><th>Выход с вкладки</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr><td><strong>${escapeHtml(r.q)}</strong></td><td>${escapeHtml(r.err)}</td><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.exit)}</td></tr>`).join("")}</tbody>
+      </table>`
+          : `<p class="muted">Нет данных по вопросам — дождитесь сдач класса.</p>`
+      }
+    </div>`;
+  updateBreadcrumbs();
+}
+
+async function renderAdminTeacherOverviewPage(main, session) {
+  const retentionBanner = await renderSubmissionsRetentionBanner();
+  main.innerHTML = `
+    ${retentionBanner}
+    <div class="panel">
+      <h3>Кабинет учителя</h3>
+      <p class="lead">${escapeHtml(session?.school_name || "")} · ${escapeHtml(session?.user?.full_name || "")}</p>
+      <p class="muted">Слева: <strong>Контрольные</strong> — проверка и настройка, <strong>Статистика класса</strong> — таблица учеников, <strong>Ошибки</strong> — проблемные вопросы.</p>
+    </div>`;
+  updateBreadcrumbs();
+}
+
+async function renderAdminShellSection(main, session) {
+  const section = portalState.shellView || "admin-home";
+  if (section === "classes") await renderAdminClassesPage(main);
+  else if (section === "staff-tests") await renderAdminStaffTestsPage(main);
+  else if (section === "class-stats") await renderAdminClassStatsPage(main);
+  else if (section === "errors") await renderAdminErrorsPage(main);
+  else if (section === "teacher-home") await renderAdminTeacherOverviewPage(main, session);
+  else await renderAdminOverviewPage(main, session);
 }
 
 async function renderAdminClassSubjects(main) {
@@ -2480,17 +2606,21 @@ async function renderAdminClassSubjects(main) {
     bindAdminTestsPanel(main, cls);
   }
   $("btn-back-classes").addEventListener("click", () => {
+    if (shellNavigate("classes")) return;
     portalState.adminView = "home";
+    portalState.shellView = "classes";
     portalState.className = null;
     portalState.examTitle = null;
     renderAdminFlow();
   });
   bindRowNav(main, "[data-subject-code]", (el) => {
-    portalState.adminView = "subject";
-    portalState.subjectCode = el.getAttribute("data-subject-code");
-    const sub = data.subjects.find((s) => s.code === portalState.subjectCode);
-    portalState.subjectTitle = sub ? sub.title : portalState.subjectCode;
+    const subjectCode = el.getAttribute("data-subject-code");
+    const sub = data.subjects.find((s) => s.code === subjectCode);
+    portalState.subjectTitle = sub ? sub.title : subjectCode;
     portalState.suppressSingleExamAutoload = false;
+    if (shellNavigate("admin-subject", { className: cls, subjectCode })) return;
+    portalState.adminView = "subject";
+    portalState.subjectCode = subjectCode;
     renderAdminFlow();
   });
   updateBreadcrumbs();
@@ -2534,12 +2664,15 @@ async function renderAdminSubjectTests(main) {
   $("btn-back-subjects").addEventListener("click", () => {
     if (portalState.staffTestsShortcut) {
       portalState.staffTestsShortcut = false;
+      if (shellNavigate("staff-tests")) return;
       portalState.adminView = "home";
+      portalState.shellView = "staff-tests";
       portalState.className = null;
       portalState.subjectCode = null;
       portalState.subjectTitle = null;
       portalState.examId = null;
     } else {
+      if (shellNavigate("admin-class", { className: cls })) return;
       portalState.adminView = "class";
       portalState.subjectCode = null;
       portalState.examId = null;
@@ -2547,8 +2680,10 @@ async function renderAdminSubjectTests(main) {
     renderAdminFlow();
   });
   bindRowNav(main, "[data-exam-id]", (el) => {
+    const examId = Number(el.getAttribute("data-exam-id"));
+    portalState.examId = examId;
     portalState.adminView = "exam";
-    portalState.examId = Number(el.getAttribute("data-exam-id"));
+    if (shellNavigate("admin-exam", { className: cls, subjectCode: code, examId })) return;
     renderAdminFlow();
   });
   updateBreadcrumbs();
@@ -3166,19 +3301,23 @@ async function renderAdminExamDetail(main) {
   bindTeacherReportPanel(main, examId);
   const backTestsBtn = $("btn-back-tests");
   if (backTestsBtn && portalState.staffTestsShortcut) {
-    backTestsBtn.textContent = "← На главную";
+    backTestsBtn.textContent = "← К контрольным";
   }
   backTestsBtn?.addEventListener("click", () => {
     if (blockActionIfExamActive()) return;
     if (portalState.staffTestsShortcut) {
       portalState.staffTestsShortcut = false;
+      if (shellNavigate("staff-tests")) return;
       portalState.adminView = "home";
+      portalState.shellView = "staff-tests";
       portalState.className = null;
       portalState.subjectCode = null;
       portalState.subjectTitle = null;
       portalState.examId = null;
       portalState.examTitle = null;
     } else {
+      if (shellNavigate("admin-subject", { className: portalState.className, subjectCode: portalState.subjectCode }))
+        return;
       portalState.adminView = "subject";
       portalState.examId = null;
       portalState.examTitle = null;
@@ -3301,7 +3440,7 @@ async function renderAdminFlow() {
   }
   try {
     if (portalState.adminView === "home") {
-      await renderAdminHome(main, portalState.session);
+      await renderAdminShellSection(main, portalState.session);
     } else if (portalState.adminView === "class") {
       await renderAdminClassSubjects(main);
     } else if (portalState.adminView === "subject") {
@@ -3340,6 +3479,7 @@ async function renderStudentFlow() {
   main.innerHTML = `<p class="muted">Загрузка…</p>`;
 
   if (portalState.adminView === "home") {
+    const section = portalState.shellView || "home";
     const highlightId = portalState.highlightResultExamId;
     const data = await api("/api/portal/my/subjects");
     const { tests: completedTests, overall_score_percent: overallScore } = await loadStudentCompletedTests(data);
@@ -3349,25 +3489,57 @@ async function renderStudentFlow() {
     } catch (err) {
       console.warn("portal: exam bundle", err);
     }
-    const bundleBlock = renderStudentExamBundlePanel(bundle);
-    const resultsBlock = renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore);
     const syncNote = portalState.githubSyncWarning
       ? `<p class="muted portal-sync-note" role="status">Результат сохранён на этом устройстве. Если учитель не видит сдачу — обновите страницу или откройте ссылку класса ещё раз.</p>`
       : "";
     if (portalState.githubSyncWarning) portalState.githubSyncWarning = false;
-    main.innerHTML = `
+
+    const introPanel = `
       <div class="panel">
         <h3>${escapeHtml(u.full_name)}</h3>
         <p class="lead">${escapeHtml(session.school_name)} · класс ${escapeHtml(data.class_name)}</p>
         ${syncNote}
-      </div>
-      ${bundleBlock}
-      ${resultsBlock}
-    `;
+      </div>`;
+
+    const progressPanel = `
+      <div class="panel">
+        <h3>Отслеживание прогресса</h3>
+        <p class="muted">Индивидуальная шкала по предмету (демо Q1–Q4)</p>
+        <div class="chart-line">
+          <svg viewBox="0 0 400 120" preserveAspectRatio="none">
+            <polyline fill="none" stroke="#9333ea" stroke-width="3" points="20,100 100,85 180,70 260,45 340,25"/>
+            <circle cx="20" cy="100" r="5" fill="#9333ea"/>
+            <circle cx="100" cy="85" r="5" fill="#9333ea"/>
+            <circle cx="180" cy="70" r="5" fill="#9333ea"/>
+            <circle cx="260" cy="45" r="5" fill="#9333ea"/>
+            <circle cx="340" cy="25" r="5" fill="#9333ea"/>
+          </svg>
+        </div>
+      </div>`;
+
+    const overviewStats = `
+      <div class="grid-3 lavh-student-overview-grid">
+        <div class="stat-card blue"><span class="muted" style="color:rgba(255,255,255,.85)">Средний балл</span><div class="big">${overallScore ?? "—"}%</div><small>по сданным тестам</small></div>
+        <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completedTests.length}</div><small>из ${bundle?.test_count ?? 3} в бандле</small></div>
+        <div class="stat-card purple"><span class="muted" style="color:rgba(255,255,255,.85)">Школа</span><div class="big" style="font-size:1rem">${escapeHtml(session.school_name)}</div><small>LAVH TEST</small></div>
+      </div>`;
+
+    let body = introPanel;
+    if (section === "tests") {
+      body = `${introPanel}${renderStudentExamBundlePanel(bundle)}`;
+    } else if (section === "results") {
+      body = `${introPanel}${renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore)}`;
+    } else if (section === "progress") {
+      body = `${introPanel}${progressPanel}`;
+    } else {
+      body = `${introPanel}${overviewStats}<p class="muted lavh-section-hint">Разделы слева: <strong>Мои тесты</strong>, <strong>Результаты</strong>, <strong>Прогресс</strong>.</p>`;
+    }
+
+    main.innerHTML = body;
     bindStudentExamBundlePanel(main, bundle);
     bindCollapsiblePanels(main);
     bindStudentResultCards(main);
-    if (highlightId != null) {
+    if (highlightId != null && section === "results") {
       scrollToHighlightedResult(main);
       portalState.highlightResultExamId = null;
     }
@@ -3467,6 +3639,9 @@ async function renderStudentFlow() {
 
 async function renderDashboard(session) {
   portalState.session = session;
+  if (!portalState.shellView) {
+    portalState.shellView = session.user?.role === "student" ? "home" : "admin-home";
+  }
   portalState.adminView = "home";
   portalState.className = session.user.class_name || null;
   portalState.subjectCode = null;
@@ -3574,45 +3749,47 @@ export async function lavhInitPortalRuntime() {
   }
 }
 
-export async function lavhRenderPortalDashboard(session) {
+export async function lavhRenderPortalDashboard(session, initialShellView) {
+  if (initialShellView) portalState.shellView = initialShellView;
   await renderDashboard(session);
 }
 
 export function lavhSyncPortalNavFromLavhView(viewId, adminNav = {}) {
+  portalState.shellView = viewId;
+
+  if (viewId === "admin-class" && adminNav.className) {
+    portalState.adminView = "class";
+    portalState.className = adminNav.className;
+    portalState.subjectCode = null;
+    portalState.subjectTitle = null;
+    portalState.examId = null;
+    portalState.examTitle = null;
+    return;
+  }
+
+  if (viewId === "admin-subject" && adminNav.className && adminNav.subjectCode) {
+    portalState.adminView = "subject";
+    portalState.className = adminNav.className;
+    portalState.subjectCode = adminNav.subjectCode;
+    portalState.examId = null;
+    portalState.examTitle = null;
+    return;
+  }
+
+  if (viewId === "admin-exam" && adminNav.examId != null) {
+    portalState.adminView = "exam";
+    if (adminNav.className) portalState.className = adminNav.className;
+    if (adminNav.subjectCode) portalState.subjectCode = adminNav.subjectCode;
+    portalState.examId = Number(adminNav.examId);
+    return;
+  }
+
   portalState.adminView = "home";
   portalState.className = null;
   portalState.subjectCode = null;
   portalState.subjectTitle = null;
   portalState.examId = null;
   portalState.examTitle = null;
-
-  if (
-    viewId === "home" ||
-    viewId === "tests" ||
-    viewId === "results" ||
-    viewId === "progress" ||
-    viewId === "teacher-home" ||
-    viewId === "editor" ||
-    viewId === "class-stats" ||
-    viewId === "errors"
-  ) {
-    portalState.adminView = "home";
-    return;
-  }
-
-  if (viewId === "admin-class" && adminNav.className) {
-    portalState.adminView = "class";
-    portalState.className = adminNav.className;
-  } else if (viewId === "admin-subject" && adminNav.subjectCode) {
-    portalState.adminView = "subject";
-    portalState.className = adminNav.className;
-    portalState.subjectCode = adminNav.subjectCode;
-  } else if (viewId === "admin-exam" && adminNav.examId) {
-    portalState.adminView = "exam";
-    portalState.className = adminNav.className;
-    portalState.subjectCode = adminNav.subjectCode;
-    portalState.examId = adminNav.examId;
-  }
 }
 
 export { renderAdminFlow, renderStudentFlow, portalState };
