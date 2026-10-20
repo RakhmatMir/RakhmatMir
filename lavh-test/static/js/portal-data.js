@@ -111,8 +111,15 @@ function parseSubmissionsFromJsonBody(body) {
 
 function liveSubmissionsFetchUrls(bust) {
   const t = bust ? Date.now() : 8;
+  const urls = [];
+  const school = getActiveSchoolCode();
+  if (school) {
+    urls.push(
+      `${dataBasePath()}/schools/${encodeURIComponent(school)}/submissions.json?v=1${bust ? `&_=${t}` : ""}`
+    );
+  }
   // raw main — сразу после GitHub API PUT; Pages CDN часто отстаёт на часы
-  const urls = [`${SUBMISSIONS_GITHUB_RAW}?t=${t}`];
+  urls.push(`${SUBMISSIONS_GITHUB_RAW}?t=${t}`);
   urls.push(`${dataBasePath()}/submissions.json?v=9${bust ? `&_=${t}` : ""}`);
   return urls;
 }

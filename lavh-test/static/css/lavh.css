@@ -343,6 +343,20 @@ body {
   margin: 0;
 }
 
+.lavh-breadcrumbs {
+  margin-top: 8px;
+}
+
+.main-panel.portal-host {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.portal-host .panel {
+  border-radius: var(--lavh-radius);
+}
+
 body.nav-drawer-open {
   overflow: hidden;
 }

@@ -14,8 +14,48 @@ import {
   resolveDemoUserSchool,
   setActiveSchoolCode,
 } from "./portal-data.js";
+import {
+  lavhInitPortalRuntime,
+  lavhRenderPortalDashboard,
+  lavhSyncPortalNavFromLavhView,
+  renderAdminFlow,
+  renderStudentFlow,
+  portalState,
+} from "./portal-app.js";
 
 const $app = document.getElementById("app");
+let portalRuntimeReady = false;
+let portalDashboardBooted = false;
+
+const PORTAL_MODALS_HTML = `
+    <div class="exam-guard-modal hidden" id="student-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="student-confirm-title">
+      <div class="exam-guard-backdrop" id="student-confirm-backdrop"></div>
+      <div class="exam-guard-dialog panel">
+        <h3 id="student-confirm-title">Подтверждение</h3>
+        <p id="student-confirm-desc"></p>
+        <div class="student-confirm-actions">
+          <button type="button" class="btn-ghost" id="student-confirm-cancel">Отмена</button>
+          <button type="button" class="btn-primary" id="student-confirm-ok">Начать</button>
+        </div>
+      </div>
+    </div>
+    <div class="exam-guard-modal hidden" id="exam-guard-modal" role="alertdialog" aria-modal="true" aria-labelledby="exam-guard-title">
+      <div class="exam-guard-backdrop" id="exam-guard-backdrop"></div>
+      <div class="exam-guard-dialog panel">
+        <h3 id="exam-guard-title">Тест не завершён</h3>
+        <p id="exam-guard-desc">До окончания теста недоступны другие действия.</p>
+        <p class="exam-guard-reason muted" id="exam-guard-reason"></p>
+        <p class="muted exam-guard-count" id="exam-guard-count" hidden></p>
+        <button type="button" class="btn-primary" id="exam-guard-ok">Продолжить тест</button>
+      </div>
+    </div>
+    <div class="exam-guard-modal hidden" id="teacher-student-submission-modal" role="dialog" aria-modal="true">
+      <div class="exam-guard-backdrop" id="teacher-student-submission-backdrop"></div>
+      <div class="exam-guard-dialog panel teacher-student-submission-dialog">
+        <button type="button" class="btn-ghost teacher-student-submission-close" aria-label="Закрыть">×</button>
+        <div class="teacher-student-submission-body" id="teacher-student-submission-body"></div>
+      </div>
+    </div>`;
 
 const state = {
   session: null,
@@ -191,6 +231,7 @@ async function login(loginVal, password, uiMode, schoolHint = null) {
 
   setActiveSchoolCode(code);
   state.schoolCode = code;
+  portalDashboardBooted = false;
 
   const registered = findRegisteredUser(code, loginVal, password);
   if (registered) {
@@ -233,7 +274,40 @@ async function logout() {
   await api("/api/logout", { method: "POST", body: "{}" });
   state.session = null;
   state.exam = null;
+  portalDashboardBooted = false;
   renderAuth();
+}
+
+async function ensurePortalRuntime() {
+  if (!portalRuntimeReady) {
+    await lavhInitPortalRuntime();
+    portalRuntimeReady = true;
+  }
+}
+
+async function refreshPortalMain() {
+  await ensurePortalRuntime();
+  portalState.session = state.session;
+  window.portalState = portalState;
+
+  if (!portalDashboardBooted) {
+    portalDashboardBooted = true;
+    await lavhRenderPortalDashboard(state.session);
+    return;
+  }
+
+  lavhSyncPortalNavFromLavhView(state.view, state.adminNav);
+  const role = state.session?.user?.role;
+  if (role === "admin" || state.uiMode === "teacher") {
+    await renderAdminFlow();
+  } else if (role === "student") {
+    await renderStudentFlow();
+  }
+}
+
+function isPortalShellView() {
+  const v = state.view;
+  return v !== "profile" && v !== "settings";
 }
 
 const AUTH_ERRORS = {
@@ -394,25 +468,9 @@ async function renderAuth(options = {}) {
 
 async function renderMainContent() {
   const v = state.view;
-  const user = state.session?.user;
-
-  if (v === "home") return renderStudentHome();
-  if (v === "tests") return renderStudentTests();
-  if (v === "exam") return renderExam();
-  if (v === "results") return renderStudentResults();
-  if (v === "progress") return renderProgress();
-  if (v === "teacher-home") return renderTeacherHome();
-  if (v === "editor") return renderEditor();
-  if (v === "class-stats") return renderClassStats();
-  if (v === "errors") return renderErrorsAgg();
-  if (v === "admin-home") return renderAdminHome();
-  if (v === "admin-class") return renderAdminClassView();
-  if (v === "admin-subject") return renderAdminSubjectView();
-  if (v === "admin-exam") return renderAdminExamView();
-  if (v === "classes") return renderAdminClasses();
   if (v === "profile") return renderProfile();
   if (v === "settings") return renderSettings();
-  return `<p class="muted">Раздел в разработке</p>`;
+  return "";
 }
 
 function renderSettings() {
@@ -1173,7 +1231,8 @@ const VIEW_TITLES = {
 async function renderShell() {
   const user = state.session?.user;
   const [title, sub] = VIEW_TITLES[state.view] || ["LAVH TEST", ""];
-  const content = await renderMainContent();
+  const portalView = Boolean(user && isPortalShellView());
+  const content = portalView ? "" : await renderMainContent();
 
   $app.innerHTML = `
     <div class="shell">
@@ -1211,13 +1270,15 @@ async function renderShell() {
           <header class="main-header main-header--compact">
             <h1>${escapeHtml(title)}</h1>
             <p>${escapeHtml(sub)}</p>
+            <nav class="lavh-breadcrumbs breadcrumbs" id="lavh-breadcrumbs" aria-label="Где вы находитесь"></nav>
           </header>
         </div>
         <div class="main-stage">
-          <div class="main-panel">${content}</div>
+          <div class="main-panel ${portalView ? "portal-host" : ""}" id="${portalView ? "lavh-portal-main" : "lavh-static-main"}">${content}</div>
         </div>
       </main>
-    </div>`;
+    </div>
+    ${PORTAL_MODALS_HTML}`;
 
   const shell = document.querySelector(".shell");
   const toggle = document.getElementById("nav-toggle");
@@ -1248,15 +1309,12 @@ async function renderShell() {
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
-  bindTestList();
-  bindExam();
-  bindProfile();
-  bindSettings();
-  bindAdminNavigation();
-  document.querySelectorAll("[data-view-jump]").forEach((el) => {
-    el.addEventListener("click", () => switchView(el.getAttribute("data-view-jump")));
-  });
-  document.getElementById("btn-details")?.addEventListener("click", () => alert("В полной версии — окно с ответами по каждому вопросу."));
+  if (portalView) {
+    await refreshPortalMain();
+  } else {
+    bindProfile();
+    bindSettings();
+  }
 }
 
 async function boot() {
