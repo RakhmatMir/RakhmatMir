@@ -100,13 +100,6 @@ body {
   flex-shrink: 0;
 }
 
-.lavh-logo--footer {
-  width: 64px;
-  height: auto;
-  margin-left: auto;
-  margin-bottom: 4px;
-}
-
 .auth-left h1 {
   font-size: clamp(1.75rem, 3vw, 2.25rem);
   margin: 0;
@@ -303,24 +296,6 @@ body {
 .btn-register:hover {
   background: var(--lavh-blue-bg);
   box-shadow: 0 8px 20px rgba(74, 105, 226, 0.15);
-}
-
-.brand-footer {
-  position: absolute;
-  right: 32px;
-  bottom: 24px;
-  text-align: right;
-  font-size: 0.75rem;
-  color: var(--lavh-muted);
-  z-index: 1;
-}
-
-.brand-footer-text {
-  display: block;
-  font-size: 0.7rem;
-  color: var(--lavh-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* —— Shell —— */
