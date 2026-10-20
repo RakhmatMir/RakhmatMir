@@ -621,7 +621,7 @@ function testsForClassSubject(bundle, className, subjectCode, submissions) {
   return bundle.exams
     .filter((ex) => ex.class_name === className && ex.subject_code === subjectCode)
     .map((ex) => {
-      const progress = examClassProgress(bundle, ex.id, submissions);
+      const stats = examStaffTestStats(bundle, ex.id, submissions);
       return {
         id: ex.id,
         title: ex.title,
@@ -631,8 +631,10 @@ function testsForClassSubject(bundle, className, subjectCode, submissions) {
         catalog_key: ex.catalog_key,
         duration_minutes: ex.duration_minutes,
         question_count: ex.question_count,
-        submitted_count: progress.submittedCount,
-        class_total: progress.classTotal || classTotal,
+        submitted_count: stats.submitted_count,
+        class_total: stats.class_total || classTotal,
+        all_submitted: stats.all_submitted,
+        avg_score_percent: stats.avg_score_percent,
       };
     });
 }
@@ -641,7 +643,7 @@ function staffTestsList(bundle, submissions) {
   return bundle.exams.map((ex) => {
     const published = isExamPublishedToStudents(bundle, ex.id);
     const duration_minutes = resolveExamDurationMinutes(bundle, ex);
-    const progress = examClassProgress(bundle, ex.id, submissions);
+    const stats = examStaffTestStats(bundle, ex.id, submissions);
     return {
       id: ex.id,
       class_name: ex.class_name,
@@ -652,8 +654,10 @@ function staffTestsList(bundle, submissions) {
       kind_label: ex.kind_label,
       catalog_key: ex.catalog_key,
       question_count: ex.question_count,
-      submitted_count: progress.submittedCount,
-      class_total: progress.classTotal || rosterSize(bundle, ex.class_name),
+      submitted_count: stats.submitted_count,
+      class_total: stats.class_total || rosterSize(bundle, ex.class_name),
+      all_submitted: stats.all_submitted,
+      avg_score_percent: stats.avg_score_percent,
       published_to_students: published,
       duration_minutes,
       requires_teacher_publish: Boolean(ex.requires_teacher_publish),
@@ -676,6 +680,29 @@ function examClassProgress(bundle, examId, submissions) {
   }
   const allSubmitted = classTotal === 0 || submittedCount >= classTotal;
   return { classTotal, submittedCount, allSubmitted };
+}
+
+function examStaffTestStats(bundle, examId, submissions) {
+  const progress = examClassProgress(bundle, examId, submissions);
+  const ex = examById(bundle, examId);
+  let scoreSum = 0;
+  let scoreCount = 0;
+  if (ex) {
+    for (const row of classRoster(bundle, ex.class_name)) {
+      const sub = getSubmission(submissions, examId, row.id);
+      const pct = Number(sub?.score_percent);
+      if (Number.isFinite(pct)) {
+        scoreSum += pct;
+        scoreCount += 1;
+      }
+    }
+  }
+  return {
+    submitted_count: progress.submittedCount,
+    class_total: progress.classTotal,
+    all_submitted: progress.allSubmitted,
+    avg_score_percent: scoreCount ? Math.round(scoreSum / scoreCount) : null,
+  };
 }
 
 function examResultsReleased(bundle, examId, submissions) {

@@ -2158,25 +2158,40 @@ function renderStaffTestsPool(poolKey, label, tests) {
   </section>`;
 }
 
+function staffTestRowSubtitle(t, poolKey) {
+  const n = t.submitted_count ?? 0;
+  const total = t.class_total ?? 0;
+  const pubNote = t.published_to_students ? " · опубликован" : " · не опубликован";
+  const kind = t.kind_label || testListMeta(t);
+  const donePool = poolKey === "done" || t.all_submitted || (total > 0 && n >= total);
+  if (donePool && total) {
+    const parts = [`${n}/${total} сдали`];
+    if (t.avg_score_percent != null) parts.push(`ср. балл ${t.avg_score_percent}%`);
+    if (t.question_count) parts.push(`${t.question_count} вопр.`);
+    if (t.control_date) parts.push(t.control_date);
+    parts.push(kind);
+    if (!t.published_to_students) parts.push(pubNote.replace(/^ · /, ""));
+    return parts.join(" · ");
+  }
+  if (total) return `${n}/${total} сдали · ${kind}${pubNote}`;
+  return `${kind}${pubNote}`;
+}
+
 function renderStaffHomeTestRows(tests, poolKey) {
   if (!tests.length) {
     return `<li class="staff-tests-empty"><span class="muted">Нет тестов в этой группе</span></li>`;
   }
   return tests
     .map((t, idx) => {
-      const n = t.submitted_count ?? 0;
-      const total = t.class_total ?? 0;
-      const pubNote = t.published_to_students ? " · опубликован" : " · не опубликован";
-      const sub = total
-        ? `${n}/${total} сдали · ${t.kind_label || testListMeta(t)}${pubNote}`
-        : `${testListMeta(t)}${pubNote}`;
+      const sub = staffTestRowSubtitle(t, poolKey);
       const mainLine = [t.class_name, t.subject_title || t.subject_code, t.title]
         .filter(Boolean)
         .map(escapeHtml)
         .join(" · ");
-      return `<li class="row-link" role="button" tabindex="0" data-staff-test-pool="${escapeHtml(poolKey)}" data-staff-exam-idx="${idx}">
+      const rowClass = poolKey === "done" ? " row-link--staff-done" : "";
+      return `<li class="row-link${rowClass}" role="button" tabindex="0" data-staff-test-pool="${escapeHtml(poolKey)}" data-staff-exam-idx="${idx}">
         <span class="row-link-main">${mainLine}</span>
-        <span class="muted">${escapeHtml(sub)}</span>
+        <span class="muted staff-tests-row-meta">${escapeHtml(sub)}</span>
       </li>`;
     })
     .join("");
@@ -2387,6 +2402,7 @@ async function renderAdminHome(main, session) {
     : `<li><span class="muted">Нет классов — добавьте учеников с указанием класса</span></li>`;
 
   const isStaffTestCompleted = (t) => {
+    if (t.catalog_key === "done" || t.all_submitted) return true;
     const total = Number(t.class_total) || 0;
     const submitted = Number(t.submitted_count) || 0;
     return total > 0 && submitted >= total;

@@ -322,6 +322,19 @@ body {
   gap: 8px;
 }
 
+/* Desktop: sidebar = viewport height, main scrolls independently */
+@media (min-width: 961px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    max-height: 100vh;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+}
+
 .sidebar-close {
   display: none;
 }
