@@ -19,21 +19,27 @@
 
 ## Демо-вход
 
-Локально:
+### Локально на ноутбуке (основной режим)
+
+Все живые данные — **один файл** `data/platform-store.json` (учётки + сдачи по школам). Практика в файл не пишется.
+
+Запуск (обязательно `serve.py`, не простой `http.server`):
 
 ```bash
 cd lavh-test
-python3 -m http.server 8080
+python serve.py
 ```
 
-Откройте http://127.0.0.1:8080
+Откройте http://127.0.0.1:8080 — регистрации и сдачи автоматически дописываются в `platform-store.json`. При первом запуске, если файла нет, он собирается из `data/users.json` и `data/schools/*/submissions.json`.
 
-Публичная ссылка:
+Копию для бэкапа достаточно сохранить папку `lavh-test/data/` (или только `platform-store.json`).
 
-**https://rakhmatmir.github.io/RakhmatMir/**
+### GitHub Pages (один репозиторий)
 
-Данные и логика тестов — `portal-data.js` + полный интерфейс портала `portal-app.js` (как на рабочем сайте).
+Публичное демо: **https://rakhmatmir.github.io/RakhmatMir/** — всё в [RakhmatMir/RakhmatMir](https://github.com/RakhmatMir/RakhmatMir): код в `lavh-test/`, живые данные в `lavh-test/data/platform-store.json`. Синхронизация с токеном: `?portal_sync_token=...` (Contents: Read and write на этот репозиторий). Старые копии проекта — папка `D:\old\старые школьные проекты\`.
 
-Сдачи школы: `data/schools/<код>/submissions.json` (для **foundation** выгружены с рабочего API: 18 учеников × 3 теста). Повторный экспорт — скрипт в `lavh-test/scripts/export-foundation-submissions.py`.
+Данные и логика тестов — `portal-data.js` + полный интерфейс портала `portal-app.js`.
+
+Сдачи школы в репозитории: `data/schools/<код>/submissions.json`. Повторный экспорт с API — `lavh-test/scripts/export-foundation-submissions.py`.
 
 Файл `data/portal.json` устарел; используйте `data/schools/...`.

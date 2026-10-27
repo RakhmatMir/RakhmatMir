@@ -1,11 +1,10 @@
-/** Выгрузка сдач из localStorage в data/submissions.json на GitHub (GitHub Contents API). */
+/** Сдачи → единый data/platform-store.json в репозитории school-portal. */
 
-export const PORTAL_GITHUB_SUBMISSIONS = {
-  owner: "RakhmatMir",
-  repo: "school-portal",
-  branch: "main",
-  path: "data/submissions.json",
-};
+import { isGitHubPagesSite, isLocalPortalServer, platformStoreGithubCfg } from "./portal-github-store.js";
+import { autoSyncPlatformStoreOnLoad, syncPlatformStoreFromLocal } from "./portal-platform-store.js";
+
+/** @deprecated единый store; оставлено для старых вызовов */
+export const PORTAL_GITHUB_SUBMISSIONS = platformStoreGithubCfg();
 
 const LOCAL_KEY = "portal_site_submissions_v1";
 const SYNC_TOKEN_KEY = "portal_github_sync_token";
@@ -195,7 +194,7 @@ export async function syncStudentSubmissionsToGithub(bundle, { attempts = 4 } = 
         maxAttempts: 5,
         commitMessage: "Student exam submission sync",
       });
-      if (result?.skipped === "no_token") {
+      if (result?.skipped === "no_token" && !isLocalPortalServer()) {
         throw new Error("no_token");
       }
       if (result?.skipped && result.skipped !== "already_synced") {
@@ -216,71 +215,28 @@ export async function syncStudentSubmissionsToGithub(bundle, { attempts = 4 } = 
 }
 
 async function pushSubmissionsToGitHubOnce(token, opts = {}) {
-  const cfg = { ...PORTAL_GITHUB_SUBMISSIONS, ...opts.cfg };
-  const mergeRemote = opts.mergeRemote !== false;
   const local = readLocalSubmissionMap();
   const localCount = Object.keys(local).length;
 
-  if (!localCount && !mergeRemote) {
-    throw new Error("local_empty");
-  }
-
-  let remote = { sha: null, submissions: {}, meta: null, raw: {} };
-  if (mergeRemote) {
-    remote = await fetchGitHubSubmissionFile(cfg);
-  }
-
-  const merged = mergeSubmissionMaps(remote.submissions, local);
-  let bundle = opts.bundle || null;
-  if (!bundle) {
-    try {
-      const mod = await import("./portal-data.js");
-      bundle = await mod.loadPortalBundle();
-    } catch {
-      bundle = null;
-    }
-  }
-  const payload = await buildSubmissionFilePayload(bundle, merged, remote.raw || { meta: remote.meta });
-
   if (opts.downloadOnly) {
-    downloadSubmissionsJson(merged);
-    return {
-      localCount,
-      remoteCount: Object.keys(remote.submissions).length,
-      mergedCount: Object.keys(merged).length,
-      downloaded: true,
-    };
+    downloadSubmissionsJson(local);
+    return { localCount, mergedCount: localCount, downloaded: true };
   }
 
   if (!token || typeof token !== "string") {
     throw new Error("token_required");
   }
 
-  const content = encodeFileContent(JSON.stringify(payload, null, 2));
-  const putUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
-  const body = {
-    message: opts.commitMessage || `Sync exam submissions (${Object.keys(merged).length} entries)`,
-    content,
-    branch: cfg.branch,
-  };
-  if (remote.sha) body.sha = remote.sha;
-
-  const res = await fetch(putUrl, {
-    method: "PUT",
-    headers: { ...apiHeaders(token), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  const result = await syncPlatformStoreFromLocal(token, {
+    bundle: opts.bundle,
+    schoolCode: opts.schoolCode,
+    commitMessage: opts.commitMessage || `Sync exam submissions (${localCount} local)`,
+    force: localCount > 0,
   });
-  if (!res.ok) {
-    const err = await res.text();
-    const conflict = res.status === 409;
-    throw Object.assign(new Error(`github_put_failed: ${res.status} ${err}`), { conflict });
-  }
-  const result = await res.json();
   return {
     localCount,
-    remoteCount: Object.keys(remote.submissions).length,
-    mergedCount: Object.keys(merged).length,
-    commit: result.commit?.html_url || null,
+    mergedCount: localCount,
+    ...result,
   };
 }
 
@@ -324,28 +280,32 @@ export async function resolveSyncToken(bundle = null) {
   }
 }
 
-/** При загрузке страницы: если есть токен и локальные сдачи — отправить в GitHub. */
+/** При загрузке: users + submissions → platform-store (локально или GitHub). */
 export async function autoSyncSubmissionsOnLoad(opts = {}) {
   if (!isAutoSyncEnabled()) return { skipped: "auto_off" };
-  const token =
-    opts.token ||
-    (opts.bundle ? resolveUploadTokenFromBundle(opts.bundle) || getGitHubSyncToken() : "") ||
-    (await resolveSyncToken(opts.bundle));
-  if (!token) return { skipped: "no_token" };
+  const onLocal = isLocalPortalServer();
+  if (!onLocal && !isGitHubPagesSite()) return { skipped: "static_only" };
+
+  let token = opts.token || "";
+  if (!onLocal) {
+    token =
+      token ||
+      (opts.bundle ? resolveUploadTokenFromBundle(opts.bundle) || getGitHubSyncToken() : "") ||
+      (await resolveSyncToken(opts.bundle));
+    if (!token) return { skipped: "no_token" };
+  }
 
   const local = readLocalSubmissionMap();
   const fp = localSubmissionsFingerprint(local);
-  if (!fp) return { skipped: "local_empty" };
-
   const lastFp = localStorage.getItem(SYNC_FP_KEY) || "";
+  if (!fp && !opts.force) {
+    return autoSyncPlatformStoreOnLoad({ ...opts, token: token || null });
+  }
   if (fp === lastFp && !opts.force) return { skipped: "already_synced" };
 
-  const result = await pushSubmissionsToGitHub(token, {
-    commitMessage: opts.commitMessage || "Auto-sync exam submissions on page load",
-    bundle: opts.bundle,
-  });
-  localStorage.setItem(SYNC_FP_KEY, fp);
-  return { synced: true, ...result };
+  const result = await autoSyncPlatformStoreOnLoad({ ...opts, token: token || null });
+  if (fp) localStorage.setItem(SYNC_FP_KEY, fp);
+  return result;
 }
 
 /** Скопировать localStorage в буфер (для отправки учителю). */

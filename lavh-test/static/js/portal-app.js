@@ -4,7 +4,7 @@ import {
   getActiveSchoolCode,
   invalidateRemoteSubmissionsCache,
   loadPortalBundle,
-} from "./portal-data.js?v=57";
+} from "./portal-data.js?v=60";
 import {
   autoSyncSubmissionsOnLoad,
   copyLocalSubmissionsToClipboard,
@@ -802,7 +802,14 @@ async function loadStudentCompletedTests(fromSubjectsPayload) {
 }
 
 function useSiteData() {
-  return Boolean(location.hostname.endsWith("github.io") || window.PORTAL_USE_STATIC_DATA);
+  const host = location.hostname;
+  return Boolean(
+    host.endsWith("github.io") ||
+      window.PORTAL_USE_STATIC_DATA ||
+      host === "127.0.0.1" ||
+      host === "localhost" ||
+      host === "::1"
+  );
 }
 
 const PORTAL_SUBMISSIONS_KEY = "portal_site_submissions_v1";
