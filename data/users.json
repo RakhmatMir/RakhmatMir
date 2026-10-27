@@ -1,0 +1,74 @@
+[
+  {
+    "id": 910001,
+    "school_code": null,
+    "login": "bot-pupil",
+    "password": "bot1234",
+    "full_name": "Бот Ученик",
+    "telegram": "",
+    "role": "admin",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  },
+  {
+    "id": 910002,
+    "school_code": null,
+    "login": "bot-teacher",
+    "password": "bot1234",
+    "full_name": "Бот Учитель",
+    "telegram": "",
+    "role": "teacher",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  },
+  {
+    "id": 910003,
+    "school_code": null,
+    "login": "bot-admin",
+    "password": "bot1234",
+    "full_name": "Бот Админ",
+    "telegram": "",
+    "role": "admin",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  },
+  {
+    "id": 910004,
+    "school_code": null,
+    "login": "bot-pupil-2",
+    "password": "bot1234",
+    "full_name": "Бот Ученик 2",
+    "telegram": "",
+    "role": "student",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  },
+  {
+    "id": 910005,
+    "school_code": null,
+    "login": "bot-teacher-2",
+    "password": "bot1234",
+    "full_name": "Бот Учитель 2",
+    "telegram": "",
+    "role": "teacher",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  },
+  {
+    "id": 910006,
+    "school_code": null,
+    "login": "bot-admin-2",
+    "password": "bot1234",
+    "full_name": "Бот Админ 2",
+    "telegram": "",
+    "role": "admin",
+    "kind": "bot",
+    "class_name": null,
+    "created_at": "2026-10-27T00:00:00.000Z"
+  }
+]

@@ -1,19 +1,27 @@
 import {
+  assignRegisteredUserSchool,
   findRegisteredUser,
   findRegisteredUserGlobal,
   getRegisteredByLogin,
+  listUnassignedUsers,
+  listUsersForSchool,
+  loadPublicUsers,
+  persistPublicUsers,
   registerPublicUser,
-} from "./auth-local.js";
+  unassignRegisteredUser,
+} from "./auth-local.js?v=6";
 import {
+  authenticateSuperAdmin,
+  clearActiveSchoolCode,
   dataApi,
   demoAuthApi,
   getActiveSchoolCode,
+  invalidatePortalBundleCache,
   loadPortalBundle,
-  loadSchoolsIndex,
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=49";
+} from "./portal-data.js?v=57";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -21,7 +29,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=57";
+} from "./portal-app.js?v=82";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -72,14 +80,17 @@ const state = {
 const PAGE_STATE_KEY = "lavh_page_v1";
 
 function viewsForMode(uiMode) {
-  const extra = ["profile", "settings", "admin-class", "admin-subject", "admin-exam"];
-  const base = (VIEWS[uiMode] || VIEWS.student).map((item) => item.id);
-  return new Set([...base, ...extra]);
+  const extra = ["profile", "settings"];
+  if (uiMode === "super") extra.push("super-schools", "admin-class", "admin-subject", "admin-exam");
+  else if (uiMode === "admin") extra.push("admin-exam");
+  const list =
+    uiMode === "super" && state.schoolCode ? VIEWS.superSchool : VIEWS[uiMode] || VIEWS.student;
+  return new Set([...list.map((item) => item.id), ...extra]);
 }
 
 function defaultViewForMode(uiMode) {
   if (uiMode === "student") return "home";
-  if (uiMode === "teacher") return "teacher-home";
+  if (uiMode === "super") return state.schoolCode ? "admin-home" : "super-schools";
   return "admin-home";
 }
 
@@ -155,22 +166,24 @@ const VIEWS = {
     { id: "results", label: "Результаты", icon: "◆" },
     { id: "progress", label: "Прогресс", icon: "◆" },
   ],
-  teacher: [
-    { id: "teacher-home", label: "Обзор", icon: "◆" },
-    { id: "classes", label: "Классы", icon: "◆" },
-    { id: "create-test", label: "Создать тест", icon: "◆" },
-    { id: "staff-tests", label: "Контрольные", icon: "◆" },
-    { id: "class-stats", label: "Статистика класса", icon: "◆" },
-    { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
-  ],
   admin: [
     { id: "admin-home", label: "Обзор", icon: "◆" },
-    { id: "classes", label: "Классы", icon: "◆" },
     { id: "test-flow", label: "Ход тестов", icon: "◆" },
     { id: "staff-tests", label: "Контрольные", icon: "◆" },
     { id: "class-stats", label: "Статистика класса", icon: "◆" },
     { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
   ],
+  superSchool: [
+    { id: "admin-home", label: "Обзор", icon: "◆" },
+    { id: "school-people", label: "Люди", icon: "◆" },
+    { id: "classes", label: "Классы", icon: "◆" },
+    { id: "create-test", label: "Создать тест", icon: "◆" },
+    { id: "test-flow", label: "Ход тестов", icon: "◆" },
+    { id: "staff-tests", label: "Контрольные", icon: "◆" },
+    { id: "class-stats", label: "Статистика класса", icon: "◆" },
+    { id: "errors", label: "Ошибки по вопросам", icon: "◆" },
+  ],
+  super: [{ id: "super-schools", label: "Школы", icon: "◆" }],
 };
 
 const LOGO_SRC = "assets/lavh-logo.png";
@@ -181,11 +194,18 @@ function logoImg(size = "md", alt = "LAVH Educational Technology") {
 
 const DEMO_ACCOUNTS = [
   {
-    label: "Учитель",
+    label: "Супер-админ",
+    school: null,
+    login: "superadmin",
+    password: "lavh-super-2026",
+    uiMode: "super",
+  },
+  {
+    label: "Админ",
     school: "foundation",
-    login: "teacher",
-    password: "teacher123",
-    uiMode: "teacher",
+    login: "admin",
+    password: "admin123",
+    uiMode: "admin",
   },
   {
     label: "Ученик",
@@ -210,13 +230,10 @@ async function api(path, options = {}) {
 }
 
 function roleLabel() {
-  if (state.uiMode === "admin") return "Администратор";
-  if (state.uiMode === "teacher") {
-    const cls = state.session?.user?.class_name;
-    const subject = state.session?.user?.subject_title;
-    const parts = ["Учитель", subject, cls].filter(Boolean);
-    return parts.join(" · ");
-  }
+  const role = state.session?.user?.role;
+  if (state.uiMode === "super" || role === "super_admin") return "Супер-администратор";
+  if (role === "teacher") return "Учитель";
+  if (role === "admin" || state.uiMode === "admin") return "Администратор";
   return "Ученик";
 }
 
@@ -275,10 +292,28 @@ function sidebarDockBlock(user) {
     </div>`;
 }
 
+function schoolNavLabel() {
+  return (
+    String(state.session?.school_name || state.bundle?.school_name || "").trim() || "Школа"
+  );
+}
+
 function navItems() {
-  if (state.uiMode === "admin") return VIEWS.admin;
-  if (state.uiMode === "teacher") return VIEWS.teacher;
-  return VIEWS.student;
+  let items;
+  if (state.uiMode === "super" && state.schoolCode) items = VIEWS.superSchool;
+  else if (state.uiMode === "super") items = VIEWS.super;
+  else if (state.uiMode === "admin") items = VIEWS.admin;
+  else items = VIEWS.student;
+  const school = schoolNavLabel();
+  if (school && state.session && state.uiMode !== "super") {
+    items = items.map((item) => {
+      if (item.id === "admin-home" || item.id === "home") {
+        return { ...item, label: school };
+      }
+      return item;
+    });
+  }
+  return items;
 }
 
 function isNavItemActive(itemId) {
@@ -296,12 +331,30 @@ function isNavItemActive(itemId) {
   return false;
 }
 
+function relabelSchoolNavButtons() {
+  const school = schoolNavLabel();
+  if (!school || !state.session) return;
+  document.querySelectorAll('.nav-btn[data-view="admin-home"], .nav-btn[data-view="home"]').forEach((btn) => {
+    btn.innerHTML = `<span class="nav-dot"></span>${escapeHtml(school)}`;
+  });
+}
+
 function updateShellChrome() {
   const [title, sub] = VIEW_TITLES[state.view] || VIEW_TITLES[portalState.shellView] || ["LAVH TEST", ""];
+  const school = schoolNavLabel();
+  const staffHome =
+    (state.uiMode === "admin" || (state.uiMode === "super" && state.schoolCode)) &&
+    (state.view === "admin-home" || portalState.shellView === "admin-home");
+  const studentHome = state.uiMode === "student" && (state.view === "home" || portalState.shellView === "home");
+  const displayTitle = (staffHome || studentHome) && school ? school : title;
   const h1 = document.querySelector(".main-header h1");
   const lead = document.querySelector(".main-header p");
-  if (h1) h1.textContent = title;
-  if (lead) lead.textContent = sub;
+  if (h1) h1.textContent = displayTitle;
+  if (lead) {
+    lead.textContent = sub;
+    lead.hidden = !sub;
+  }
+  relabelSchoolNavButtons();
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.classList.toggle("active", isNavItemActive(btn.dataset.view));
   });
@@ -315,6 +368,8 @@ function updateShellChrome() {
       ?.classList.toggle("is-active", state.view === "settings");
   }
 }
+
+window.__lavhUpdateShellChrome = updateShellChrome;
 
 window.__lavhShellNavigate = async (viewId, adminNav = {}) => {
   if (viewId === "admin-class") {
@@ -354,6 +409,9 @@ function setMobileNavOpen(open) {
 }
 
 async function switchView(id) {
+  if (state.uiMode === "admin" && ["create-test", "classes", "admin-class", "admin-subject"].includes(id)) {
+    id = "test-flow";
+  }
   if (state.view === id || state.leaving) return;
   if (
     id === "admin-home" ||
@@ -361,8 +419,9 @@ async function switchView(id) {
     id === "staff-tests" ||
     id === "class-stats" ||
     id === "errors" ||
-    id === "teacher-home" ||
     id === "create-test" ||
+    id === "super-schools" ||
+    id === "school-people" ||
     id === "test-flow" ||
     id === "home" ||
     id === "tests" ||
@@ -384,11 +443,30 @@ async function switchView(id) {
 }
 
 async function login(loginVal, password, uiMode, schoolHint = null) {
+  const superSession = await authenticateSuperAdmin(loginVal, password);
+  if (superSession) {
+    clearActiveSchoolCode();
+    state.schoolCode = "";
+    if (window.portalState) window.portalState.schoolCode = "";
+    persistDemoSession(superSession);
+    state.session = superSession;
+    state.uiMode = "super";
+    state.userKind = "platform";
+    state.schoolCode = "";
+    state.view = "super-schools";
+    state.adminNav = { className: null, subjectCode: null, examId: null };
+    portalDashboardBooted = false;
+    savePageState();
+    renderShell();
+    return;
+  }
+
   let code = String(schoolHint || "").trim().toLowerCase();
   if (!code) {
     const registeredGlobal = findRegisteredUserGlobal(loginVal, password);
     if (registeredGlobal) {
-      code = registeredGlobal.school_code;
+      code = registeredGlobal.school_code || "";
+      if (!code) throw new Error("school_not_assigned");
     } else {
       const resolved = await resolveDemoUserSchool(loginVal, password);
       if (!resolved) throw new Error("invalid_credentials");
@@ -403,21 +481,22 @@ async function login(loginVal, password, uiMode, schoolHint = null) {
   const registered = findRegisteredUser(code, loginVal, password);
   if (registered) {
     const bundle = await loadPortalBundle({ fresh: true, schoolCode: code });
+    const role = registered.role === "teacher" || registered.role === "admin" ? registered.role : "student";
     state.session = {
       user: {
         id: registered.id,
         login: registered.login,
         full_name: registered.full_name,
-        role: "student",
+        role,
         class_name: registered.class_name ?? null,
       },
       school_name: bundle.school_name,
       school_code: code,
     };
     persistDemoSession(state.session);
-    state.uiMode = "student";
+    state.uiMode = role === "student" ? "student" : "admin";
     state.userKind = "public";
-    state.view = "home";
+    state.view = defaultViewForMode(state.uiMode);
     state.bundle = bundle;
     renderShell();
     return;
@@ -431,9 +510,10 @@ async function login(loginVal, password, uiMode, schoolHint = null) {
   persistDemoSession(session);
   state.session = session;
   state.userKind = "school";
-  if (session.user.role === "teacher") state.uiMode = "teacher";
-  else state.uiMode = uiMode || (session.user.role === "admin" ? "admin" : "student");
-  state.view = state.uiMode === "student" ? "home" : state.uiMode === "teacher" ? "teacher-home" : "admin-home";
+  const role = session.user.role === "teacher" ? "admin" : session.user.role;
+  if (role === "admin") session.user.role = "admin";
+  state.uiMode = uiMode || (role === "admin" ? "admin" : "student");
+  state.view = defaultViewForMode(state.uiMode);
   state.adminNav = { className: null, subjectCode: null, examId: null };
   state.bundle = await loadPortalBundle({ fresh: true, schoolCode: code });
   savePageState();
@@ -442,7 +522,9 @@ async function login(loginVal, password, uiMode, schoolHint = null) {
 
 async function logout() {
   await api("/api/logout", { method: "POST", body: "{}" });
+  clearActiveSchoolCode();
   state.session = null;
+  state.schoolCode = "";
   state.exam = null;
   portalDashboardBooted = false;
   renderAuth();
@@ -458,8 +540,15 @@ async function ensurePortalRuntime() {
 async function refreshPortalMain() {
   await ensurePortalRuntime();
   portalState.session = state.session;
-  portalState.teacherUiMode = state.uiMode === "teacher";
+  portalState.schoolCode = state.schoolCode || getActiveSchoolCode() || "";
+  portalState.teacherUiMode = false;
   window.portalState = portalState;
+
+  if (state.session?.user?.role === "super_admin" && !state.schoolCode) {
+    updateShellChrome();
+    savePageState();
+    return;
+  }
 
   if (!portalDashboardBooted) {
     portalDashboardBooted = true;
@@ -474,7 +563,9 @@ async function refreshPortalMain() {
     updateShellChrome();
   }
   const role = state.session?.user?.role;
-  if (role === "admin" || state.uiMode === "teacher") {
+  if (role === "super_admin" && state.schoolCode) {
+    await renderAdminFlow();
+  } else if (role === "admin" || state.session?.user?.role === "teacher") {
     await renderAdminFlow();
   } else if (role === "student") {
     await renderStudentFlow();
@@ -484,7 +575,41 @@ async function refreshPortalMain() {
 
 function isPortalShellView() {
   const v = state.view;
+  if (state.uiMode === "super" && !state.schoolCode) return false;
+  if (v === "super-schools" || v === "school-people") return false;
   return v !== "profile" && v !== "settings";
+}
+
+async function enterSuperSchool(code) {
+  const schoolCode = String(code || "").trim().toLowerCase();
+  if (!schoolCode) return;
+  setActiveSchoolCode(schoolCode);
+  state.schoolCode = schoolCode;
+  portalDashboardBooted = false;
+  const bundle = await loadPortalBundle({ fresh: true, schoolCode });
+  state.session.school_code = schoolCode;
+  state.session.school_name = bundle.school_name;
+  persistDemoSession(state.session);
+  state.view = "admin-home";
+  state.adminNav = { className: null, subjectCode: null, examId: null };
+  state.bundle = bundle;
+  window.__lavhPendingPortalNav = null;
+  savePageState();
+  renderShell();
+}
+
+async function exitSuperSchool() {
+  clearActiveSchoolCode();
+  state.schoolCode = "";
+  state.session.school_code = null;
+  state.session.school_name = null;
+  state.view = "super-schools";
+  state.adminNav = { className: null, subjectCode: null, examId: null };
+  portalDashboardBooted = false;
+  invalidatePortalBundleCache();
+  persistDemoSession(state.session);
+  savePageState();
+  renderShell();
 }
 
 const AUTH_ERRORS = {
@@ -494,6 +619,11 @@ const AUTH_ERRORS = {
   password_mismatch: "Пароли не совпадают",
   school_required: "Укажите код школы",
   school_not_found: "Школа не найдена. Проверьте код.",
+  school_not_assigned: "Школу ещё не назначил супер-админ. Войти можно после назначения.",
+  user_not_found: "Регистрация не найдена.",
+  role_invalid: "Выберите роль: ученик, учитель или админ.",
+  class_required: "Для ученика выберите класс.",
+  save_failed: "Не удалось записать пользователей в данные сайта.",
 };
 
 function authErrorMessage(err) {
@@ -503,38 +633,16 @@ function authErrorMessage(err) {
   return AUTH_ERRORS[err?.message] || "Неверный логин или пароль";
 }
 
-function schoolDatalistHtml(schools) {
-  const options = (schools || [])
-    .map(
-      (s) =>
-        `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)} (${escapeHtml(s.code)})</option>`
-    )
-    .join("");
-  return `<datalist id="school-codes">${options}</datalist>`;
-}
-
-function schoolFieldHtml(value = "") {
-  const v = escapeHtml(value || getActiveSchoolCode() || "foundation");
-  return `
-    <label class="field">
-      <span>Код школы</span>
-      <input name="school_code" required autocomplete="organization" list="school-codes" placeholder="foundation" value="${v}" />
-    </label>`;
-}
-
 async function renderAuth(options = {}) {
   const error = typeof options === "string" ? options : options.error || "";
   const registerOk = options.registerOk || null;
   const showRegister = (options.authPanel || "login") === "register";
-  const schoolsIndex = await loadSchoolsIndex();
-  const schools = schoolsIndex.schools || [];
-  const schoolPrefill = options.schoolCode || getActiveSchoolCode() || "foundation";
 
   const loginCard = `
     <form class="auth-card auth-panel" id="login-form" ${showRegister ? 'hidden' : ""}>
       <h2>Вход</h2>
       <p class="sub">Логин и пароль — школа определяется автоматически</p>
-      ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. Войдите ниже.</p>` : ""}
+      ${registerOk ? `<p class="auth-success">Аккаунт создан. Логин: <strong>${escapeHtml(registerOk.login)}</strong>. ${registerOk.waitingSchool ? "Войти можно после того, как супер-админ назначит школу." : "Войдите ниже."}</p>` : ""}
       ${error && !showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
       <label class="field"><span>Логин</span><input name="login" required autocomplete="username" /></label>
       <label class="field"><span>Пароль</span><input name="password" type="password" required autocomplete="current-password" /></label>
@@ -547,9 +655,8 @@ async function renderAuth(options = {}) {
   const registerCard = `
     <form class="auth-card auth-panel auth-card-register" id="register-form" ${showRegister ? "" : "hidden"}>
       <h2>Регистрация</h2>
-      <p class="sub">Аккаунт в выбранной школе · Telegram позже</p>
+      <p class="sub">Школу назначит супер-админ</p>
       ${error && showRegister ? `<p class="auth-error">${escapeHtml(error)}</p>` : ""}
-      ${schoolFieldHtml(schoolPrefill)}
       <label class="field"><span>Имя</span><input name="full_name" required autocomplete="name" placeholder="Как к вам обращаться" /></label>
       <label class="field"><span>Telegram</span><input name="telegram" autocomplete="username" placeholder="@username" /></label>
       <label class="field"><span>Логин</span><input name="login" required autocomplete="username" minlength="3" placeholder="латиница, цифры" /></label>
@@ -568,10 +675,23 @@ async function renderAuth(options = {}) {
           <div class="auth-logo-wrap">${logoImg("hero")}</div>
           <h1>LAVH TEST</h1>
         </div>
-        <p>Платформа, которая облегчает работу учителей и помогает точнее контролировать успеваемость учеников — тесты, результаты и аналитика в одном месте.</p>
+        <p class="auth-lead">Платформа, которая облегчает работу учителей и помогает точнее контролировать успеваемость учеников — тесты, результаты и аналитика в одном месте.</p>
+        <ul class="auth-points">
+          <li>
+            <span class="auth-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 7h8M8 11h8M8 15h5"/><rect x="4" y="3.5" width="16" height="17" rx="2.5"/></svg></span>
+            <span><strong>Тесты</strong><small>Создайте работу и отправьте её классу</small></span>
+          </li>
+          <li>
+            <span class="auth-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9M12 19V5M19 19v-7"/></svg></span>
+            <span><strong>Результаты</strong><small>Кто сдал и какой балл — сразу в таблице</small></span>
+          </li>
+          <li>
+            <span class="auth-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
+            <span><strong>Аналитика</strong><small>Ошибки по вопросам и статистика класса</small></span>
+          </li>
+        </ul>
       </div>
       <div class="auth-column">
-        ${schoolDatalistHtml(schools)}
         <div class="auth-stack">
           ${loginCard}
           ${registerCard}
@@ -600,7 +720,7 @@ async function renderAuth(options = {}) {
     }
   });
 
-  document.getElementById("register-form")?.addEventListener("submit", (e) => {
+  document.getElementById("register-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     if (fd.get("password") !== fd.get("password2")) {
@@ -609,16 +729,15 @@ async function renderAuth(options = {}) {
     }
     try {
       const user = registerPublicUser({
-        schoolCode: fd.get("school_code"),
         login: fd.get("login"),
         password: fd.get("password"),
         fullName: fd.get("full_name"),
         telegram: fd.get("telegram"),
       });
+      await persistPublicUsers();
       renderAuth({
-        registerOk: { login: user.login },
+        registerOk: { login: user.login, waitingSchool: true },
         authPanel: "login",
-        schoolCode: user.school_code,
       });
     } catch (err) {
       renderAuth({ error: AUTH_ERRORS[err.message] || "Не удалось зарегистрироваться", authPanel: "register" });
@@ -643,10 +762,324 @@ async function renderAuth(options = {}) {
   });
 }
 
+const SUPER_SCHOOL_ERRORS = {
+  school_code_invalid: "Код школы: латиница, цифры, дефис (минимум 2 символа).",
+  school_name_required: "Укажите название школы.",
+  school_exists: "Школа с таким кодом уже есть.",
+  admin_login_short: "Логин админа школы — не короче 3 символов.",
+  admin_password_short: "Пароль админа школы — не короче 4 символов.",
+  forbidden: "Нет доступа.",
+};
+
+async function renderSuperSchoolsPanel() {
+  portalState.session = state.session;
+  window.portalState = portalState;
+  let data;
+  try {
+    data = await api("/api/super/schools");
+  } catch {
+    return `<div class="lavh-card"><p class="auth-error">Не удалось загрузить список школ.</p></div>`;
+  }
+  const schools = data.schools || [];
+  const rows = schools.length
+    ? schools
+        .map(
+          (s) => `<li class="row-link is-tappable super-school-row" role="button" tabindex="0" data-school-code="${escapeHtml(s.code)}">
+        <span class="super-school-copy">
+          <span class="row-link-main">${escapeHtml(s.name)} <span class="muted">(${escapeHtml(s.code)})</span></span>
+          <span class="super-school-desc">${escapeHtml(s.description || "")}${s.source === "browser" ? " · только в браузере" : ""}</span>
+        </span>
+      </li>`
+        )
+        .join("")
+    : `<li><span class="muted">Школ пока нет.</span></li>`;
+
+  return `
+    <div class="lavh-card super-schools-card">
+      <h3>Школы платформы</h3>
+      <p class="muted">Откройте школу: там люди без школы, классы и тесты. Новые школы сохраняются в этом браузере (демо).</p>
+      <ul class="list-plain super-school-list">${rows}</ul>
+    </div>
+    <div class="lavh-card super-school-form-card">
+      <h3>Добавить школу</h3>
+      <form id="form-super-add-school" class="admin-school-form">
+        <div class="field-row">
+          <label><span>Код</span><input name="code" required placeholder="north-school" minlength="2" maxlength="32" pattern="[a-zA-Z0-9_-]+" /></label>
+          <label><span>Название</span><input name="name" required placeholder="СШ № 12" maxlength="80" /></label>
+        </div>
+        <label class="field"><span>Описание</span><input name="description" placeholder="Кратко о школе" maxlength="160" /></label>
+        <h4>Админ школы</h4>
+        <div class="field-row">
+          <label><span>ФИО</span><input name="admin_full_name" required value="Администратор" /></label>
+          <label><span>Логин</span><input name="admin_login" required value="admin" minlength="3" /></label>
+          <label><span>Пароль</span><input name="admin_password" required value="admin123" minlength="4" /></label>
+        </div>
+        <button type="submit" class="btn-primary" style="max-width:260px">Создать школу</button>
+        <p class="form-msg" id="super-school-form-msg" hidden role="status"></p>
+      </form>
+    </div>`;
+}
+
+function bindSuperSchools() {
+  document.querySelectorAll(".super-school-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      const code = row.getAttribute("data-school-code");
+      void enterSuperSchool(code);
+    });
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const code = row.getAttribute("data-school-code");
+        void enterSuperSchool(code);
+      }
+    });
+  });
+  document.getElementById("form-super-add-school")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const msg = document.getElementById("super-school-form-msg");
+    const body = Object.fromEntries(new FormData(form).entries());
+    if (msg) {
+      msg.hidden = true;
+      msg.className = "form-msg";
+    }
+    try {
+      await api("/api/super/schools", { method: "POST", body: JSON.stringify(body) });
+      state.view = "super-schools";
+      renderShell();
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = SUPER_SCHOOL_ERRORS[err.message] || "Не удалось создать школу.";
+      }
+    }
+  });
+}
+
+const ROLE_LABELS = {
+  student: "Ученик",
+  teacher: "Учитель",
+  admin: "Админ",
+};
+
+function personRole(user) {
+  if (user?.role === "teacher" || user?.role === "admin") return user.role;
+  return "student";
+}
+
+function classOptionsHtml(classes) {
+  return (classes || [])
+    .map((row) => `<option value="${escapeHtml(row.class_name)}">${escapeHtml(row.class_name)}</option>`)
+    .join("");
+}
+
+async function renderSchoolPeoplePanel() {
+  portalState.session = state.session;
+  portalState.schoolCode = state.schoolCode || "";
+  window.portalState = portalState;
+  let classes = [];
+  try {
+    classes = await api("/api/portal/classes");
+  } catch {
+    classes = state.bundle?.classes || [];
+  }
+  const classOptions = classOptionsHtml(classes);
+  const pending = listUnassignedUsers();
+  const members = listUsersForSchool(state.schoolCode);
+  if (!state.bundle?.demo_users && state.schoolCode) {
+    try {
+      state.bundle = await loadPortalBundle({ schoolCode: state.schoolCode });
+    } catch {
+      /* список школы останется из того, что уже есть */
+    }
+  }
+  const removable = new Set(members.map((user) => String(user.login || "").toLowerCase()));
+  const schoolPeople = [];
+  const seen = new Set();
+  for (const user of [...(state.bundle?.demo_users || []), ...members]) {
+    const login = String(user?.login || "").toLowerCase();
+    if (!login || seen.has(login)) continue;
+    seen.add(login);
+    schoolPeople.push(user);
+  }
+  const userOptions = pending.length
+    ? pending
+        .map((user) => {
+          const role = personRole(user);
+          return `<button type="button" data-login="${escapeHtml(user.login)}" data-role="${role}"><strong>${escapeHtml(user.full_name || user.login)}</strong> <span class="muted">${escapeHtml(user.login)}</span></button>`;
+        })
+        .join("")
+    : "";
+  const memberRows = schoolPeople.length
+    ? schoolPeople
+        .map((user) => {
+          const remove = removable.has(String(user.login || "").toLowerCase())
+            ? `<button type="button" class="btn-ghost btn-mini" data-unassign="${escapeHtml(user.login)}">Убрать</button>`
+            : "";
+          const admin = personRole(user) === "admin" ? " is-admin" : "";
+          return `<li class="people-person${admin}">
+            <p class="people-person-id"><strong>${escapeHtml(user.full_name || user.login)}</strong><span class="muted">${escapeHtml(user.login)} · ${escapeHtml(ROLE_LABELS[personRole(user)] || "")}${user.class_name ? ` · ${escapeHtml(user.class_name)}` : ""}</span></p>
+            ${remove}
+          </li>`;
+        })
+        .join("")
+    : `<li class="people-person"><span class="muted">Никого нет.</span></li>`;
+
+  return `
+    <div class="lavh-card">
+      <h3>Люди</h3>
+      <p class="muted">Новый логин создаёт учётку. Кнопка «Имена» у логина подставляет человека, который ещё без школы.</p>
+      <form id="form-create-person" class="admin-school-form people-form">
+        <div class="field-row">
+          <label><span>Роль</span>
+            <select name="role" required>
+              <option value="student">Ученик</option>
+              <option value="teacher">Учитель</option>
+              <option value="admin">Админ школы</option>
+            </select>
+          </label>
+          <label><span>Имя</span><input name="full_name" required placeholder="Иванов Иван" /></label>
+        </div>
+        <div class="field-row">
+          <label><span>Логин</span>
+            <span class="admin-input-actions">
+              <input name="login" required minlength="3" placeholder="латиница" autocomplete="off" />
+              <details class="people-pick">
+                <summary class="btn-ghost">Имена</summary>
+                <div class="people-pick-menu">${userOptions}<p class="muted people-pick-empty" hidden>В этой роли никого нет.</p></div>
+              </details>
+            </span>
+          </label>
+          <label id="create-person-password"><span>Пароль</span><input name="password" required minlength="6" placeholder="не короче 6" /></label>
+          <label id="create-person-class"><span>Класс</span><select name="class_name" ${classOptions ? "required" : "disabled"}>${classOptions || `<option value="">Нет классов</option>`}</select></label>
+        </div>
+        <button type="submit" class="btn-primary" style="max-width:260px">Добавить в школу</button>
+        <p class="form-msg" hidden role="status"></p>
+      </form>
+      <details class="people-members-fold">
+        <summary class="people-col-label">В этой школе · ${schoolPeople.length}</summary>
+        <ul class="list-plain people-members">${memberRows}</ul>
+      </details>
+    </div>`;
+}
+
+function bindSchoolPeople() {
+  const form = document.getElementById("form-create-person");
+  const classLabel = document.getElementById("create-person-class");
+  const passwordLabel = document.getElementById("create-person-password");
+  const roleInput = form?.querySelector('[name="role"]');
+  const loginInput = form?.querySelector('[name="login"]');
+  const nameInput = form?.querySelector('[name="full_name"]');
+  const passwordInput = form?.querySelector('[name="password"]');
+  const knownLogins = new Set(
+    [...(form?.querySelectorAll("[data-login]") || [])].map((btn) => String(btn.getAttribute("data-login") || "").toLowerCase())
+  );
+  const syncPersonForm = () => {
+    const role = roleInput?.value || "student";
+    const student = role === "student";
+    let visibleNames = 0;
+    form?.querySelectorAll(".people-pick-menu [data-login]").forEach((btn) => {
+      const show = btn.getAttribute("data-role") === role;
+      btn.hidden = !show;
+      if (show) visibleNames += 1;
+    });
+    const emptyNames = form?.querySelector(".people-pick-empty");
+    if (emptyNames) emptyNames.hidden = visibleNames > 0;
+    const currentLogin = String(loginInput?.value || "").trim().toLowerCase();
+    const picked = [...(form?.querySelectorAll(".people-pick-menu [data-login]") || [])].find(
+      (btn) => String(btn.getAttribute("data-login") || "").toLowerCase() === currentLogin
+    );
+    if (picked?.hidden) {
+      if (loginInput) loginInput.value = "";
+      if (nameInput) nameInput.value = "";
+    }
+    if (classLabel) classLabel.hidden = !student;
+    const classSelect = classLabel?.querySelector("select");
+    if (classSelect) classSelect.required = student && !classSelect.disabled;
+    const known = knownLogins.has(String(loginInput?.value || "").trim().toLowerCase());
+    if (passwordLabel) passwordLabel.hidden = known;
+    if (passwordInput) {
+      passwordInput.required = !known;
+      passwordInput.minLength = known ? 0 : 6;
+    }
+  };
+  roleInput?.addEventListener("change", syncPersonForm);
+  loginInput?.addEventListener("input", syncPersonForm);
+  form?.querySelectorAll("[data-login]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (loginInput) loginInput.value = btn.getAttribute("data-login") || "";
+      if (nameInput) nameInput.value = btn.querySelector("strong")?.textContent || "";
+      if (roleInput) roleInput.value = btn.getAttribute("data-role") || "student";
+      const pick = form.querySelector(".people-pick");
+      if (pick) pick.open = false;
+      syncPersonForm();
+    });
+  });
+  syncPersonForm();
+
+  document.querySelectorAll("[data-unassign]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        unassignRegisteredUser(btn.getAttribute("data-unassign"));
+        await persistPublicUsers();
+        state.view = "school-people";
+        renderShell();
+      } catch (err) {
+        btn.insertAdjacentHTML(
+          "afterend",
+          `<p class="form-msg err">${escapeHtml(AUTH_ERRORS[err.message] || "Не удалось убрать из школы.")}</p>`
+        );
+      }
+    });
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const msg = form.querySelector(".form-msg");
+    const body = Object.fromEntries(new FormData(form).entries());
+    const role = String(body.role || "student");
+    const login = String(body.login || "").trim();
+    if (msg) {
+      msg.hidden = true;
+      msg.className = "form-msg";
+    }
+    try {
+      if (!ROLE_LABELS[role]) throw new Error("role_invalid");
+      if (role === "student" && !String(body.class_name || "").trim()) throw new Error("class_required");
+      const known = knownLogins.has(login.toLowerCase());
+      if (!known) {
+        registerPublicUser({
+          role,
+          login,
+          password: body.password,
+          fullName: body.full_name,
+        });
+      }
+      assignRegisteredUserSchool(login, state.schoolCode, {
+        role,
+        className: role === "student" ? body.class_name : "",
+        fullName: body.full_name,
+      });
+      await persistPublicUsers();
+      state.view = "school-people";
+      renderShell();
+    } catch (err) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg err";
+        msg.textContent = AUTH_ERRORS[err.message] || "Не удалось добавить.";
+      }
+    }
+  });
+}
+
 async function renderMainContent() {
   const v = state.view;
   if (v === "profile") return renderProfile();
   if (v === "settings") return renderSettings();
+  if (v === "super-schools") return await renderSuperSchoolsPanel();
+  if (v === "school-people") return await renderSchoolPeoplePanel();
   return "";
 }
 
@@ -1363,25 +1796,26 @@ function bindAdminNavigation() {
 }
 
 const VIEW_TITLES = {
-  home: ["Личный кабинет ученика", "Обзор и быстрые показатели"],
-  tests: ["Мои тесты", "Выберите тест для сдачи"],
-  exam: ["Прохождение теста", "LAVH TEST"],
-  results: ["Результаты", "Аналитика по решённому тесту"],
-  progress: ["Прогресс", "Отслеживание по четвертям"],
-  "teacher-home": ["Личный кабинет учителя", "Администрирование теста"],
-  editor: ["Редактор", "Вопросы теста"],
-  "class-stats": ["Статистика класса", "Ученики и баллы"],
-  errors: ["Агрегация ошибок", "Диагностика усвоения"],
-  "admin-home": ["Обзор", "Школа и уведомления"],
-  "admin-class": ["Класс", "Предметы и публикация тестов"],
-  "admin-subject": ["Предмет", "Контрольные работы"],
-  "admin-exam": ["Контрольная", "Статистика и вопросы"],
-  classes: ["Классы", "Список классов и переход к предметам"],
-  "staff-tests": ["Контрольные", "Сдача, проверка и настройка тестов"],
-  "create-test": ["Создать тест", "Тест сохраняется, ученикам его открывает учитель"],
-  "test-flow": ["Ход тестов", "Кто создал, кому отправил и как класс прошёл"],
-  profile: ["Профиль", "Ваши данные в системе"],
-  settings: ["Настройки", "Параметры аккаунта"],
+  home: ["Личный кабинет ученика", ""],
+  tests: ["Мои тесты", ""],
+  exam: ["Прохождение теста", ""],
+  results: ["Результаты", ""],
+  progress: ["Прогресс", ""],
+  editor: ["Редактор", ""],
+  "class-stats": ["Статистика класса", ""],
+  errors: ["Агрегация ошибок", ""],
+  "admin-home": ["Обзор", ""],
+  "admin-class": ["Класс", ""],
+  "admin-subject": ["Предмет", ""],
+  "admin-exam": ["Контрольная", ""],
+  classes: ["Классы", ""],
+  "staff-tests": ["Контрольные", ""],
+  "create-test": ["Создать тест", ""],
+  "test-flow": ["Ход тестов", ""],
+  "super-schools": ["Школы платформы", ""],
+  "school-people": ["Люди школы", ""],
+  profile: ["Профиль", ""],
+  settings: ["Настройки", ""],
 };
 
 async function renderShell() {
@@ -1389,6 +1823,13 @@ async function renderShell() {
   const [title, sub] = VIEW_TITLES[state.view] || ["LAVH TEST", ""];
   const portalView = Boolean(user && isPortalShellView());
   const content = portalView ? "" : await renderMainContent();
+  const superBar =
+    state.uiMode === "super" && state.schoolCode
+      ? `<div class="super-school-bar">
+      <button type="button" class="btn-ghost" id="btn-super-exit-school">← Все школы</button>
+      <span>Школа: <strong>${escapeHtml(state.session?.school_name || state.schoolCode)}</strong> <span class="muted">(${escapeHtml(state.schoolCode)})</span></span>
+    </div>`
+      : "";
 
   $app.innerHTML = `
     <div class="shell">
@@ -1425,11 +1866,12 @@ async function renderShell() {
           </button>
           <header class="main-header main-header--compact">
             <h1>${escapeHtml(title)}</h1>
-            <p>${escapeHtml(sub)}</p>
-            <nav class="lavh-breadcrumbs breadcrumbs" id="lavh-breadcrumbs" aria-label="Где вы находитесь"></nav>
+            <p ${sub ? "" : "hidden"}>${escapeHtml(sub)}</p>
+            <nav class="lavh-breadcrumbs breadcrumbs" id="lavh-breadcrumbs" aria-label="Где вы находитесь" hidden></nav>
           </header>
         </div>
         <div class="main-stage">
+          ${superBar}
           <div class="main-panel ${portalView ? "portal-host" : ""}" id="${portalView ? "lavh-portal-main" : "lavh-static-main"}">${content}</div>
         </div>
       </main>
@@ -1465,45 +1907,70 @@ async function renderShell() {
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
+  document.getElementById("btn-super-exit-school")?.addEventListener("click", () => {
+    void exitSuperSchool();
+  });
   if (portalView) {
     await refreshPortalMain();
   } else {
     bindProfile();
     bindSettings();
+    if (state.view === "super-schools") bindSuperSchools();
+    if (state.view === "school-people") bindSchoolPeople();
+  }
+}
+
+function applyRestoredShellState(session, saved) {
+  const role = session.user?.role;
+  if (role === "super_admin") {
+    state.uiMode = "super";
+    state.schoolCode = session.school_code || getActiveSchoolCode() || "";
+    if (state.schoolCode) setActiveSchoolCode(state.schoolCode);
+    else clearActiveSchoolCode();
+  } else {
+    state.uiMode = role === "admin" || role === "teacher" ? "admin" : "student";
+  }
+  if (saved?.view === "teacher-home") saved.view = "admin-home";
+  if (saved?.uiMode === "teacher") saved.uiMode = "admin";
+  if (saved && savedViewIsUsable(saved, state.uiMode)) {
+    state.view = saved.view;
+    state.adminNav = {
+      className: saved.adminNav?.className || saved.portal?.className || null,
+      subjectCode: saved.adminNav?.subjectCode || saved.portal?.subjectCode || null,
+      examId: saved.adminNav?.examId ?? saved.portal?.examId ?? null,
+    };
+    window.__lavhPendingPortalNav =
+      saved.view === "profile" || saved.view === "settings" ? null : saved.portal || null;
+  } else {
+    state.view = defaultViewForMode(state.uiMode);
+    state.adminNav = { className: null, subjectCode: null, examId: null };
+    window.__lavhPendingPortalNav = null;
   }
 }
 
 async function boot() {
-  const savedSchool = getActiveSchoolCode();
-  if (!savedSchool) {
-    await renderAuth();
-    return;
-  }
-  state.schoolCode = savedSchool;
   try {
+    await loadPublicUsers();
     const session = await api("/api/me");
     state.session = session;
-    state.schoolCode = session.school_code || savedSchool;
-    setActiveSchoolCode(state.schoolCode);
-    const role = session.user.role;
     const saved = readPageState(session);
-    if (role === "teacher") state.uiMode = "teacher";
-    else if (saved?.uiMode === "teacher" && role === "admin") state.uiMode = "teacher";
-    else state.uiMode = role === "admin" ? "admin" : "student";
-    if (saved && savedViewIsUsable(saved, state.uiMode)) {
-      state.view = saved.view;
-      state.adminNav = {
-        className: saved.adminNav?.className || saved.portal?.className || null,
-        subjectCode: saved.adminNav?.subjectCode || saved.portal?.subjectCode || null,
-        examId: saved.adminNav?.examId ?? saved.portal?.examId ?? null,
-      };
-      window.__lavhPendingPortalNav =
-        saved.view === "profile" || saved.view === "settings" ? null : saved.portal || null;
-    } else {
-      state.view = defaultViewForMode(state.uiMode);
-      state.adminNav = { className: null, subjectCode: null, examId: null };
-      window.__lavhPendingPortalNav = null;
+    applyRestoredShellState(session, saved);
+
+    if (session.user?.role === "super_admin") {
+      if (state.schoolCode) {
+        state.bundle = await loadPortalBundle({ schoolCode: state.schoolCode });
+      }
+      renderShell();
+      return;
     }
+
+    const schoolCode = session.school_code || getActiveSchoolCode();
+    if (!schoolCode) {
+      await renderAuth();
+      return;
+    }
+    state.schoolCode = schoolCode;
+    setActiveSchoolCode(schoolCode);
     state.bundle = await loadPortalBundle({ schoolCode: state.schoolCode });
     renderShell();
   } catch {
