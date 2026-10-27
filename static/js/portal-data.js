@@ -1,6 +1,7 @@
 /** Данные портала с GitHub (data/portal.json) + сдачи в localStorage. */
 
-import { listUsersForSchool } from "./auth-local.js?v=6";
+import { listUsersForSchool } from "./auth-local.js?v=8";
+import { platformStoreRawUrl } from "./portal-github-store.js";
 
 const PROBLEM_THRESHOLD = 40;
 const SUBMISSIONS_KEY = "portal_site_submissions_v1";
@@ -294,10 +295,6 @@ function dataBasePath() {
   return String(window.PORTAL_DATA_BASE || "data").replace(/\/$/, "");
 }
 
-/** Актуальный файл в репо (API-пуш виден сразу; Pages CDN отстаёт). */
-const SUBMISSIONS_GITHUB_RAW =
-  "https://raw.githubusercontent.com/RakhmatMir/school-portal/main/data/submissions.json";
-
 function parseSubmissionsFromJsonBody(body) {
   if (body?.submissions && typeof body.submissions === "object") {
     return body.submissions;
@@ -311,14 +308,15 @@ function parseSubmissionsFromJsonBody(body) {
 function liveSubmissionsFetchUrls(bust) {
   const t = bust ? Date.now() : 8;
   const urls = [];
-  const school = getActiveSchoolCode();
+  const school = getActiveSchoolCode() || "foundation";
+  urls.push(`${dataBasePath()}/platform-store.json?v=1${bust ? `&_=${t}` : ""}`);
+  urls.push("/api/site/platform-store");
   if (school) {
     urls.push(
       `${dataBasePath()}/schools/${encodeURIComponent(school)}/submissions.json?v=1${bust ? `&_=${t}` : ""}`
     );
   }
-  // raw main — сразу после GitHub API PUT; Pages CDN часто отстаёт на часы
-  urls.push(`${SUBMISSIONS_GITHUB_RAW}?t=${t}`);
+  urls.push(`${platformStoreRawUrl()}?t=${t}`);
   urls.push(`${dataBasePath()}/submissions.json?v=9${bust ? `&_=${t}` : ""}`);
   return urls;
 }
@@ -631,11 +629,28 @@ export function invalidateRemoteSubmissionsCache() {
 async function fetchRemoteSubmissionsMap() {
   const bust = forceRemoteSubmissionsFetch;
   forceRemoteSubmissionsFetch = false;
+  const school = getActiveSchoolCode() || "foundation";
+  try {
+    const { fetchPlatformStoreCached, schoolSubmissionMap } = await import("./portal-platform-store.js");
+    const store = await fetchPlatformStoreCached();
+    if (store) {
+      const fromStore = schoolSubmissionMap(store, school);
+      if (Object.keys(fromStore).length) return fromStore;
+    }
+  } catch {
+    /* try file urls */
+  }
   for (const url of liveSubmissionsFetchUrls(bust)) {
     try {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) continue;
       const body = await res.json();
+      if (body?.submissions && body.users) {
+        const block = body.submissions[school];
+        const map = block?.submissions && typeof block.submissions === "object" ? block.submissions : {};
+        if (Object.keys(map).length) return map;
+        continue;
+      }
       return parseSubmissionsFromJsonBody(body);
     } catch {
       /* try next url */

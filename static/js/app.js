@@ -9,7 +9,7 @@ import {
   persistPublicUsers,
   registerPublicUser,
   unassignRegisteredUser,
-} from "./auth-local.js?v=6";
+} from "./auth-local.js?v=8";
 import {
   authenticateSuperAdmin,
   clearActiveSchoolCode,
@@ -21,7 +21,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=57";
+} from "./portal-data.js?v=60";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -29,7 +29,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=82";
+} from "./portal-app.js?v=85";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;

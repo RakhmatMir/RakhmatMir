@@ -25,43 +25,73 @@ function normalizeSchoolCode(schoolCode) {
   return String(schoolCode || "").trim().toLowerCase();
 }
 
+function mergeUserListsByLogin(base, extra) {
+  const byLogin = new Map();
+  for (const user of Array.isArray(base) ? base : []) {
+    const login = String(user.login || "").toLowerCase();
+    if (login) byLogin.set(login, user);
+  }
+  for (const user of Array.isArray(extra) ? extra : []) {
+    const login = String(user.login || "").toLowerCase();
+    if (login && !byLogin.has(login)) byLogin.set(login, user);
+  }
+  return [...byLogin.values()];
+}
+
 function writeRegistry(list) {
   registry = list;
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(list));
   const snapshot = JSON.stringify(list);
-  registrySave = registrySave.catch(() => {}).then(() =>
-    fetch("/api/site/users", {
+  registrySave = registrySave.catch(() => {}).then(async () => {
+    const { isGitHubPagesSite } = await import("./portal-github-store.js");
+    if (isGitHubPagesSite()) {
+      const { pushUsersToGitHub } = await import("./portal-users-sync.js");
+      const { resolveSyncToken } = await import("./portal-submissions-sync.js");
+      const token = await resolveSyncToken();
+      if (!token) return;
+      await pushUsersToGitHub(token, list, { commitMessage: "Portal user registry update" });
+      return;
+    }
+    const res = await fetch("/api/site/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: snapshot,
-    }).then((res) => {
-      if (!res.ok) throw new Error("save_failed");
-    })
-  );
+    });
+    if (!res.ok) throw new Error("save_failed");
+  });
   return registrySave;
 }
 
 export async function loadPublicUsers() {
   let fromFile = null;
-  try {
-    const res = await fetch(`data/users.json?v=${Date.now()}`, { cache: "no-cache" });
-    if (res.ok) fromFile = await res.json();
-  } catch {
-    fromFile = null;
+  const { isGitHubPagesSite, isLocalPortalServer } = await import("./portal-github-store.js");
+  if (isGitHubPagesSite()) {
+    const { fetchRemoteUsersList } = await import("./portal-users-sync.js");
+    fromFile = await fetchRemoteUsersList();
+  } else if (isLocalPortalServer()) {
+    try {
+      const { fetchPlatformStoreCached } = await import("./portal-platform-store.js");
+      const store = await fetchPlatformStoreCached();
+      if (store?.users?.length) fromFile = store.users;
+    } catch {
+      fromFile = null;
+    }
+  }
+  if (!Array.isArray(fromFile)) {
+    try {
+      const res = await fetch(`data/users.json?v=${Date.now()}`, { cache: "no-cache" });
+      if (res.ok) fromFile = await res.json();
+    } catch {
+      fromFile = null;
+    }
   }
   if (Array.isArray(fromFile)) {
-    const logins = new Set(fromFile.map((user) => String(user.login || "").toLowerCase()));
-    let added = 0;
-    for (const user of readLocal()) {
-      const login = String(user.login || "").toLowerCase();
-      if (!login || logins.has(login)) continue;
-      fromFile.push(user);
-      logins.add(login);
-      added += 1;
-    }
-    registry = fromFile;
+    const merged = mergeUserListsByLogin(fromFile, readLocal());
+    registry = merged;
     localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
-    if (added) await writeRegistry(registry);
+    const remoteLogins = new Set(fromFile.map((user) => String(user.login || "").toLowerCase()));
+    const hasLocalOnly = merged.some((user) => !remoteLogins.has(String(user.login || "").toLowerCase()));
+    if (hasLocalOnly) await writeRegistry(registry);
     return registry;
   }
   registry = readLocal();
