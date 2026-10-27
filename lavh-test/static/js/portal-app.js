@@ -1,9 +1,10 @@
 import {
   dataApi,
   demoAuthApi,
+  getActiveSchoolCode,
   invalidateRemoteSubmissionsCache,
   loadPortalBundle,
-} from "./portal-data.js?v=49";
+} from "./portal-data.js?v=57";
 import {
   autoSyncSubmissionsOnLoad,
   copyLocalSubmissionsToClipboard,
@@ -1591,9 +1592,7 @@ function hideExamGuardModal() {
 let studentConfirmResolve = null;
 
 function closeStudentConfirmModal(result) {
-  const modal = $("student-confirm-modal");
-  if (!modal) return;
-  modal.classList.add("hidden");
+  $("student-confirm-modal")?.classList.add("hidden");
   document.body.classList.remove("exam-guard-open");
   const resolve = studentConfirmResolve;
   studentConfirmResolve = null;
@@ -1603,18 +1602,28 @@ function closeStudentConfirmModal(result) {
 function showStudentConfirmModal({ title, description, confirmLabel = "Начать", cancelLabel = "Отмена" }) {
   const modal = $("student-confirm-modal");
   if (!modal) return Promise.resolve(true);
-  if (studentConfirmResolve) closeStudentConfirmModal(false);
+  if (studentConfirmResolve) return Promise.resolve(false);
   $("student-confirm-title").textContent = title || "Подтверждение";
   $("student-confirm-desc").textContent = description || "";
   const okBtn = $("student-confirm-ok");
   const cancelBtn = $("student-confirm-cancel");
   if (okBtn) okBtn.textContent = confirmLabel;
   if (cancelBtn) cancelBtn.textContent = cancelLabel;
-  modal.classList.remove("hidden");
-  document.body.classList.add("exam-guard-open");
   return new Promise((resolve) => {
     studentConfirmResolve = resolve;
-    requestAnimationFrame(() => okBtn?.focus());
+    // The click that asked for this dialog must finish first.
+    // Otherwise that same press lands on the new window and is lost.
+    setTimeout(() => {
+      if (studentConfirmResolve !== resolve) return;
+      const current = $("student-confirm-modal");
+      if (!current) {
+        closeStudentConfirmModal(false);
+        return;
+      }
+      current.classList.remove("hidden");
+      document.body.classList.add("exam-guard-open");
+      okBtn?.focus();
+    }, 0);
   });
 }
 
@@ -1790,6 +1799,7 @@ function navigateBackFromStudentExam(examMeta) {
 }
 
 function setTestTakingActive(active, examId = null) {
+  document.body.classList.toggle("is-test-active", Boolean(active));
   $("screen-app")?.classList.toggle("is-test-active", active);
   if (active && examId != null) {
     startExamFocusGuard(examId);
@@ -1817,6 +1827,7 @@ function getExamDeadlineMs(examId, durationMinutes) {
 
 function clearExamDeadline(examId) {
   sessionStorage.removeItem(`portal_exam_deadline_${examId}`);
+  sessionStorage.removeItem(`portal_exam_paused_${examId}`);
 }
 
 function ensureExamQuestionTiming(examId, questionCount) {
@@ -1908,48 +1919,62 @@ async function submitStudentExam(examId, questionCount) {
   setTestTakingActive(false);
   portalState.highlightResultExamId = examId;
   if (useSiteData()) {
-    try {
-      const bundle = await loadPortalBundle({ fresh: true });
-      const sync = await syncStudentSubmissionsToGithub(bundle);
-      portalState.githubSyncWarning = Boolean(sync?.skipped);
-    } catch (err) {
-      portalState.githubSyncWarning = true;
-      console.warn("[portal] GitHub sync after submit:", err?.message || err);
-    }
+    void (async () => {
+      try {
+        const bundle = await loadPortalBundle({ fresh: true });
+        const sync = await syncStudentSubmissionsToGithub(bundle);
+        portalState.githubSyncWarning = Boolean(sync?.skipped && sync.skipped !== "already_synced");
+      } catch (err) {
+        portalState.githubSyncWarning = true;
+        console.warn("[portal] GitHub sync after submit:", err?.message || err);
+      }
+    })();
   }
   return result;
 }
 
-function renderStudentResultCard(t, { orderIndex, total, highlight }) {
-  const openClass = highlight ? " is-open" : "";
-  const hl = highlight ? " student-result-card--highlight" : "";
-  const subject = escapeHtml(t.subject_title || "Тест");
-  const orderBadge =
-    total > 1
-      ? `<span class="student-result-order-badge muted" title="Сдан ${orderIndex + 1}-м по порядку">${orderIndex + 1}</span>`
-      : "";
+function groupStudentResultsBySubject(tests) {
+  const groups = [];
+  const byKey = new Map();
+  for (const test of tests) {
+    const key = test.subject_code || test.subject_title || "test";
+    let group = byKey.get(key);
+    if (!group) {
+      group = { key, title: test.subject_title || "Тест", tests: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    group.tests.push(test);
+  }
+  return groups;
+}
+
+function renderStudentSubjectGroup(group, index, highlightExamId) {
+  const highlighted = group.tests.some((test) => test.exam_id === highlightExamId);
+  const tests = group.tests
+    .map((test) => {
+      const score = test.score_percent != null ? `${test.score_percent}%` : "—";
+      return `<li>
+        <button type="button" class="student-result-test btn-result-detail" data-exam-id="${test.exam_id}" data-subject-code="${escapeHtml(test.subject_code || "")}">
+          <span>${escapeHtml(test.title || "Тест")}</span>
+          <span class="muted">${score}</span>
+        </button>
+      </li>`;
+    })
+    .join("");
   return `
-    <article class="student-result-card panel-collapse${openClass}${hl}" data-exam-id="${t.exam_id}">
-      <button type="button" class="collapse-trigger student-result-trigger" aria-expanded="${highlight ? "true" : "false"}">
+    <article class="student-result-card panel-collapse${highlighted ? " is-open student-result-card--highlight" : ""}">
+      <button type="button" class="collapse-trigger student-result-trigger" aria-expanded="${highlighted ? "true" : "false"}">
         <span class="collapse-trigger-text student-result-trigger-text">
-          ${orderBadge}
-          <span class="student-result-subject-line">${subject}</span>
+          <span class="student-result-order-badge muted">${index + 1}</span>
+          <span class="student-result-subject-line">${escapeHtml(group.title)}</span>
+          <span class="muted student-result-count">${group.tests.length}</span>
         </span>
         <span class="collapse-chevron" aria-hidden="true">›</span>
       </button>
       <div class="collapse-body">
         <div class="collapse-body-inner">
-        <div class="student-result-details">
-          <p class="muted student-result-meta">${escapeHtml(t.title)}${t.control_date ? ` · ${escapeHtml(t.control_date)}` : ""}${t.score_line ? ` · ${escapeHtml(t.score_line)}` : ""}</p>
-          ${renderMetricColumns([
-            { label: "Результат", value: `${t.score_percent ?? "—"}%` },
-            { label: "Верно", value: `${t.correct_count ?? "—"} из ${t.question_total ?? "—"}` },
-            { label: "Время", value: t.duration_label || "—" },
-            { label: "По времени", value: t.finish_rank_label || "—" },
-            { label: "Класс", value: `${t.class_submitted ?? "—"} / ${t.class_total ?? "—"}` },
-          ])}
-          <button type="button" class="btn-ghost btn-result-detail" data-exam-id="${t.exam_id}" data-subject-code="${escapeHtml(t.subject_code || "")}">Подробные ответы</button>
-        </div>
+          <ul class="student-result-tests">${tests}</ul>
         </div>
       </div>
     </article>`;
@@ -1957,29 +1982,20 @@ function renderStudentResultCard(t, { orderIndex, total, highlight }) {
 
 function renderStudentCompletedTestsBlock(tests, highlightExamId, overallScorePercent) {
   if (!tests.length) return "";
-  const heading = tests.length === 1 ? "Результат теста" : "Пройденные тесты";
+  const groups = groupStudentResultsBySubject(tests);
+  const heading = groups.length === 1 ? "Результат теста" : "Пройденные тесты";
   const overallLine =
     overallScorePercent != null && tests.length > 1
       ? `<p class="lead muted">Общий средний балл: <strong>${overallScorePercent}%</strong></p>`
       : "";
-  const lead =
-    tests.length === 1
-      ? "Нажмите на предмет, чтобы открыть результат."
-      : `${tests.length} теста — по порядку сдачи. Нажмите предмет для деталей.`;
-  const cards = tests
-    .map((t, idx) =>
-      renderStudentResultCard(t, {
-        orderIndex: idx,
-        total: tests.length,
-        highlight: highlightExamId != null && t.exam_id === highlightExamId,
-      })
-    )
+  const cards = groups
+    .map((group, index) => renderStudentSubjectGroup(group, index, highlightExamId))
     .join("");
   return `
     <div class="panel panel-student-results" id="student-results">
       <h3>${heading}</h3>
       ${overallLine}
-      <p class="lead muted">${lead}</p>
+      <p class="lead muted">Нажмите предмет — откроются его тесты. Затем выберите, какой открыть.</p>
       <div class="student-results-stack">${cards}</div>
     </div>`;
 }
@@ -2072,18 +2088,19 @@ function bindTeacherReportPanel(main, examId) {
   });
 }
 
-function renderStudentTestStepHtml(preview, examId, stepIndex, selectedOpt) {
+function renderStudentTestStepHtml(preview, examId, stepIndex, selectedOpt, pauseRemainMs) {
   const ex = preview.exam;
   const questions = preview.questions || [];
   const q = questions[stepIndex];
   const letters = ["A", "B", "C", "D", "E", "F"];
   const total = questions.length;
-  const endMs = getExamDeadlineMs(examId, ex.duration_minutes);
-  const remainLabel = formatTimerMs(endMs - Date.now());
+  const paused = pauseRemainMs != null;
+  const endMs = paused ? 0 : getExamDeadlineMs(examId, ex.duration_minutes);
+  const remainLabel = formatTimerMs(paused ? pauseRemainMs : endMs - Date.now());
   const opts = (q?.options || [])
     .map((opt, oi) => {
       const picked = selectedOpt === oi;
-      return `<button type="button" class="student-test-opt${picked ? " is-selected" : ""}" data-opt="${oi}">
+      return `<button type="button" class="student-test-opt${picked ? " is-selected" : ""}" data-opt="${oi}" ${paused ? "disabled" : ""}>
         <span class="student-test-opt-letter">${letters[oi] || oi + 1}</span>
         <span class="student-test-opt-text">${escapeHtml(opt)}</span>
       </button>`;
@@ -2091,6 +2108,10 @@ function renderStudentTestStepHtml(preview, examId, stepIndex, selectedOpt) {
     .join("");
   const isLast = stepIndex >= total - 1;
   return `<div class="student-test-shell" data-step="${stepIndex}">
+    <div class="student-test-bar">
+      <button type="button" class="btn-ghost" id="btn-cancel-exam">Отмена</button>
+      <button type="button" class="btn-ghost" id="btn-pause-exam">${paused ? "Продолжить" : "Пауза"}</button>
+    </div>
     <div class="student-test-top">
       <span class="student-test-progress">Вопрос ${stepIndex + 1} из ${total}</span>
       <span class="student-test-timer-wrap">Осталось: <strong class="student-test-timer" id="exam-live-timer">${remainLabel}</strong></span>
@@ -2098,7 +2119,7 @@ function renderStudentTestStepHtml(preview, examId, stepIndex, selectedOpt) {
     <div class="student-test-card">
       <p class="student-test-q">${escapeHtml(q?.text || "")}</p>
       <div class="student-test-opts">${opts}</div>
-      <button type="button" class="btn-primary btn-confirm-answer" id="btn-confirm-answer" ${selectedOpt == null ? "disabled" : ""}>
+      <button type="button" class="btn-primary btn-confirm-answer" id="btn-confirm-answer" ${paused || selectedOpt == null ? "disabled" : ""}>
         ${isLast ? "Подтвердить и сдать тест" : "Подтвердить ответ"}
       </button>
       <p class="error" id="confirm-answer-error" hidden></p>
@@ -2128,6 +2149,29 @@ function mountStudentTestRunner(container, preview, examId) {
   let step = portalState.examRunStep[examId];
   let pendingOpt = null;
   let submitting = false;
+  const pauseKey = `portal_exam_paused_${examId}`;
+  const storedPause = sessionStorage.getItem(pauseKey);
+  let paused = storedPause != null;
+  let pausedRemainingMs = paused ? Math.max(0, Number(storedPause) || 0) : null;
+
+  const leaveExam = () => {
+    clearStudentExamRunLocalState(examId);
+    delete portalState.examQuestionTimes[examId];
+    if (portalState.examExitIntents) delete portalState.examExitIntents[examId];
+    try {
+      sessionStorage.removeItem(`portal_exam_exit_${examId}`);
+    } catch {
+      /* ignore */
+    }
+    setTestTakingActive(false);
+    portalState.studentExamReturnHome = false;
+    if (!shellNavigate("tests")) {
+      portalState.adminView = "home";
+      portalState.shellView = "tests";
+      portalState.examId = null;
+      renderStudentFlow();
+    }
+  };
 
   const paint = () => {
     if (step >= qCount) {
@@ -2138,10 +2182,39 @@ function mountStudentTestRunner(container, preview, examId) {
       portalState.examAnswers[examId][String(step)] !== undefined
         ? portalState.examAnswers[examId][String(step)]
         : null;
-    container.innerHTML = renderStudentTestStepHtml(preview, examId, step, pendingOpt);
+    container.innerHTML = renderStudentTestStepHtml(
+      preview,
+      examId,
+      step,
+      pendingOpt,
+      paused ? pausedRemainingMs : null
+    );
+    container.querySelector("#btn-cancel-exam")?.addEventListener("click", leaveExam);
+    container.querySelector("#btn-pause-exam")?.addEventListener("click", () => {
+      if (!paused) {
+        const endMs = getExamDeadlineMs(examId, preview.exam.duration_minutes);
+        pausedRemainingMs = Math.max(0, endMs - Date.now());
+        paused = true;
+        sessionStorage.setItem(pauseKey, String(pausedRemainingMs));
+        sessionStorage.removeItem(`portal_exam_deadline_${examId}`);
+        pauseExamQuestionTimer(examId);
+      } else {
+        sessionStorage.removeItem(pauseKey);
+        sessionStorage.setItem(
+          `portal_exam_deadline_${examId}`,
+          String(Date.now() + (pausedRemainingMs || 0))
+        );
+        paused = false;
+        pausedRemainingMs = null;
+        resumeExamQuestionTimer(examId);
+        tickTimer();
+      }
+      paint();
+    });
 
     container.querySelectorAll(".student-test-opt").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (paused) return;
         pendingOpt = Number(btn.getAttribute("data-opt"));
         container.querySelectorAll(".student-test-opt").forEach((b) => b.classList.remove("is-selected"));
         btn.classList.add("is-selected");
@@ -2152,7 +2225,7 @@ function mountStudentTestRunner(container, preview, examId) {
 
     container.querySelector("#btn-confirm-answer")?.addEventListener("click", async () => {
       const err = container.querySelector("#confirm-answer-error");
-      if (pendingOpt == null) return;
+      if (paused || pendingOpt == null) return;
       portalState.examAnswers[examId][String(step)] = pendingOpt;
       if (step >= qCount - 1) {
         recordQuestionStepTime(examId, step, qCount);
@@ -2171,6 +2244,26 @@ function mountStudentTestRunner(container, preview, examId) {
     if (submitting) return;
     submitting = true;
     stopExamTimer();
+    if (preview.exam?.practice) {
+      const answers = portalState.examAnswers[examId] || {};
+      let correct = 0;
+      questions.forEach((q, i) => {
+        if (Number(answers[String(i)]) === Number(q.correct_index)) correct += 1;
+      });
+      const total = questions.length || 1;
+      const score = Math.round((100 * correct) / total);
+      clearStudentExamRunLocalState(examId);
+      container.innerHTML = `<div class="student-test-shell">
+        <div class="student-test-card">
+          <p class="student-test-progress">Практика завершена</p>
+          <p class="student-test-q">${score}%</p>
+          <p class="muted">Верно ${correct} из ${total}. Балл нигде не сохраняется, пройти можно снова.</p>
+          <button type="button" class="btn-primary" id="btn-practice-done">Готово</button>
+        </div>
+      </div>`;
+      container.querySelector("#btn-practice-done")?.addEventListener("click", leaveExam);
+      return;
+    }
     const err = container.querySelector("#confirm-answer-error");
     const btn = container.querySelector("#btn-confirm-answer");
     if (btn) btn.disabled = true;
@@ -2180,21 +2273,34 @@ function mountStudentTestRunner(container, preview, examId) {
       portalState.adminView = "home";
       portalState.examId = null;
       portalState.subjectCode = null;
-      await renderStudentFlow();
+      portalState.studentExamReturnHome = false;
+      if (!shellNavigate("tests")) {
+        portalState.shellView = "tests";
+        await renderStudentFlow();
+      }
     } catch (e) {
       submitting = false;
+      if (e.message === "already_submitted") {
+        clearStudentExamRunLocalState(examId);
+        setTestTakingActive(false);
+        portalState.examId = null;
+        if (!shellNavigate("tests")) {
+          portalState.adminView = "home";
+          portalState.shellView = "tests";
+          await renderStudentFlow();
+        }
+        return;
+      }
       if (btn) btn.disabled = false;
       if (err) {
         err.hidden = false;
-        err.textContent =
-          e.message === "already_submitted"
-            ? "Вы уже сдали этот тест."
-            : "Не удалось сдать. Попробуйте ещё раз.";
+        err.textContent = "Не удалось сдать. Попробуйте ещё раз.";
       }
     }
   }
 
   const tickTimer = () => {
+    if (paused) return;
     const endMs = getExamDeadlineMs(examId, preview.exam.duration_minutes);
     const left = endMs - Date.now();
     const el = container.querySelector("#exam-live-timer");
@@ -2236,7 +2342,7 @@ function studentStatusLabel(statusOrStudent) {
 }
 
 function isTeacherRole() {
-  return portalState.session?.user?.role === "teacher";
+  return false;
 }
 
 function teacherClassName() {
@@ -2249,7 +2355,9 @@ function isStaffRole() {
 }
 
 function isAdminRole() {
-  return portalState.session?.user?.role === "admin" && !portalState.teacherUiMode;
+  const role = portalState.session?.user?.role;
+  if (role === "admin") return true;
+  return role === "super_admin" && Boolean(getActiveSchoolCode() || portalState.schoolCode);
 }
 
 function canManageClassRoster(className) {
@@ -2259,7 +2367,7 @@ function canManageClassRoster(className) {
 }
 
 function canManageSchool() {
-  return portalState.session?.user?.role === "admin" && !portalState.teacherUiMode;
+  return portalState.session?.user?.role === "super_admin";
 }
 
 const ROSTER_PREVIEW_COUNT = 5;
@@ -2791,7 +2899,7 @@ function renderStaffHomeTestRows(tests, poolKey) {
   return tests
     .map((t, idx) => {
       const sub = staffTestRowSubtitle(t, poolKey);
-      const mainLine = [t.class_name, t.subject_title || t.subject_code, t.title]
+      const mainLine = [t.class_name, t.title || t.subject_title || t.subject_code]
         .filter(Boolean)
         .map(escapeHtml)
         .join(" · ");
@@ -2830,36 +2938,62 @@ function bindStaffHomeTestsList(main, pools) {
   });
 }
 
+function sessionSchoolName() {
+  return String(portalState.session?.school_name || "Школа").trim() || "Школа";
+}
+
 function navigateBreadcrumb(level) {
   if (blockActionIfExamActive()) return;
   if (isStaffRole()) {
-    if (level === "home") {
+    const crumb = level === "home" ? "school" : level;
+    if (crumb === "school") {
       portalState.adminView = "home";
       portalState.className = null;
       portalState.subjectCode = null;
       portalState.subjectTitle = null;
       portalState.examId = null;
       portalState.examTitle = null;
-    } else if (level === "class") {
+      portalState.staffTestsShortcut = false;
+      portalState.shellView = "admin-home";
+      if (shellNavigate("admin-home", {})) return;
+    } else if (crumb === "class") {
       portalState.adminView = "class";
       portalState.subjectCode = null;
       portalState.subjectTitle = null;
       portalState.examId = null;
       portalState.examTitle = null;
-    } else if (level === "subject") {
+      if (
+        portalState.className &&
+        shellNavigate("admin-class", { className: portalState.className })
+      ) {
+        return;
+      }
+    } else if (crumb === "subject") {
       portalState.adminView = "subject";
       portalState.examId = null;
       portalState.examTitle = null;
       portalState.suppressSingleExamAutoload = true;
+      if (
+        portalState.className &&
+        portalState.subjectCode &&
+        shellNavigate("admin-subject", {
+          className: portalState.className,
+          subjectCode: portalState.subjectCode,
+        })
+      ) {
+        return;
+      }
     }
     renderAdminFlow();
     return;
   }
-  if (level === "home") {
+  if (level === "home" || level === "school") {
     portalState.adminView = "home";
     portalState.subjectCode = null;
     portalState.subjectTitle = null;
     portalState.examId = null;
+    portalState.shellView = "home";
+    if (shellNavigate("home", {})) return;
     renderStudentFlow();
     return;
   }
@@ -2875,11 +3009,10 @@ function buildBreadcrumbItems() {
   if (!portalState.session) return items;
 
   if (isStaffRole()) {
-    items.push({ level: "home", label: "Главная", link: portalState.adminView !== "home" });
-    if (portalState.adminView === "home") {
-      items.push({ level: "current", label: "Обзор", link: false });
-      return items;
-    }
+    const school = sessionSchoolName();
+    const onShellOnly = portalState.adminView === "home" && !portalState.className;
+    if (onShellOnly) return items;
+    items.push({ level: "school", label: school, link: true });
     if (portalState.className) {
       items.push({
         level: "class",
@@ -2913,11 +3046,9 @@ function buildBreadcrumbItems() {
   }
 
   if (portalState.session.user.role === "student") {
-    items.push({ level: "home", label: "Главная", link: portalState.adminView !== "home" });
-    if (portalState.adminView === "home") {
-      items.push({ level: "current", label: "Предметы", link: false });
-      return items;
-    }
+    const school = sessionSchoolName();
+    if (portalState.adminView === "home") return items;
+    items.push({ level: "school", label: school, link: true });
     if (portalState.adminView === "subject") {
       const tail = portalState.subjectTitle
         ? `${portalState.subjectTitle} · тесты`
@@ -2941,8 +3072,11 @@ function updateBreadcrumbs() {
   const items = buildBreadcrumbItems();
   if (!items.length) {
     nav.innerHTML = "";
+    nav.hidden = true;
+    window.__lavhUpdateShellChrome?.();
     return;
   }
+  nav.hidden = false;
   nav.innerHTML = `<ol class="breadcrumbs-list">${items
     .map((item) => {
       if (item.level === "current" || !item.link) {
@@ -2954,6 +3088,7 @@ function updateBreadcrumbs() {
   nav.querySelectorAll("[data-crumb-level]").forEach((btn) => {
     btn.addEventListener("click", () => navigateBreadcrumb(btn.getAttribute("data-crumb-level")));
   });
+  window.__lavhUpdateShellChrome?.();
 }
 
 function bindRowNav(main, selector, onPick) {
@@ -3011,16 +3146,50 @@ function isStaffTestCompletedRow(t) {
   return total > 0 && submitted >= total;
 }
 
-async function renderAdminOverviewPage(main, session) {
-  const retentionBanner = await renderSubmissionsRetentionBanner();
-  const school = escapeHtml(session?.school_name || "Школа");
+async function renderAdminOverviewPage(main) {
+  const staff = await api("/api/portal/staff/tests");
+  const tests = (staff.tests || []).filter((test) => test.published_to_students);
+  const byStudent = new Map();
+  for (const test of tests) {
+    let students = [];
+    try {
+      const admin = await api(`/api/portal/exams/${test.id}/admin`);
+      students = admin.students || [];
+    } catch (err) {
+      console.warn("portal: overview", err);
+    }
+    for (const student of students) {
+      const key = student.id ?? student.full_name;
+      const row = byStudent.get(key) || { done: 0 };
+      if (student.status === "submitted") row.done += 1;
+      byStudent.set(key, row);
+    }
+  }
+  const finishedTests = tests.filter(
+    (test) => Number(test.class_total) > 0 && Number(test.submitted_count) >= Number(test.class_total)
+  ).length;
+  const people = [...byStudent.values()];
+  const allDone = tests.length ? people.filter((row) => row.done >= tests.length).length : 0;
+  const missed = tests.length ? people.filter((row) => row.done < tests.length).length : 0;
   main.innerHTML = `
-    ${retentionBanner}
-    ${renderNotifyRecipientsPanel()}
-    <div class="panel">
-      <p class="lead">${school} · классы, ход тестов, контрольные и статистика. Тесты создают учителя.</p>
-    </div>`;
-  bindNotifyRecipients(main);
+    <section class="panel">
+      <h3>Обзор</h3>
+      <p class="muted">Сводка по отправленным тестам. Остальные разделы открываются в боковом меню.</p>
+      <div class="home-stats">
+        <article class="home-stat">
+          <strong>${finishedTests}</strong>
+          <span>Пройдено тестов</span>
+        </article>
+        <article class="home-stat">
+          <strong>${allDone}</strong>
+          <span>Ученики все прошли</span>
+        </article>
+        <article class="home-stat${missed ? " is-miss" : ""}">
+          <strong>${missed}</strong>
+          <span>Не прошли</span>
+        </article>
+      </div>
+    </section>`;
   updateBreadcrumbs();
 }
 
@@ -3227,8 +3396,8 @@ async function renderAdminTeacherOverviewPage(main, session) {
     </section>
     <section class="panel">
       <h3>Тесты</h3>
-      <p class="muted">Создайте тест, сохраните его в класс и отправьте ученикам. Результаты появятся на карточке теста.</p>
-      <button type="button" class="btn-primary" id="btn-open-create-test">Создать тест</button>
+      <p class="muted">Тесты добавляет супер-администратор. Здесь видны результаты после отправки классу.</p>
+      ${canManageSchool() ? `<button type="button" class="btn-primary" id="btn-open-create-test">Создать тест</button>` : ""}
     </section>`;
   $("btn-open-own-class")?.addEventListener("click", () => {
     if (!own) return;
@@ -3571,6 +3740,9 @@ async function renderCreateTestPage(main) {
 }
 
 async function renderAdminTestFlowPage(main) {
+  const openIds = new Set(
+    [...main.querySelectorAll("details.test-flow-students[open]")].map((node) => node.getAttribute("data-exam-id"))
+  );
   const staff = await api("/api/portal/staff/tests");
   const tests = [...(staff.tests || [])].sort((a, b) => {
     const rank = (stage) => (stage === "done" ? 1 : 0);
@@ -3605,7 +3777,9 @@ async function renderAdminTestFlowPage(main) {
           const score =
             test.avg_score_percent != null ? ` · средний балл ${test.avg_score_percent}%` : "";
           const rows = students.length
-            ? `<table class="data-table owned-test-results">
+            ? `<details class="test-flow-students" data-exam-id="${test.id}"${openIds.has(String(test.id)) ? " open" : ""}>
+            <summary>Ученики · ${students.length}</summary>
+            <table class="data-table owned-test-results">
             <thead><tr><th>Ученик</th><th>Статус</th><th>Балл</th></tr></thead>
             <tbody>${students
               .map(
@@ -3613,7 +3787,8 @@ async function renderAdminTestFlowPage(main) {
                   `<tr><td>${escapeHtml(student.full_name)}</td><td>${escapeHtml(studentStatusLabel(student))}</td><td>${student.score_percent != null ? `${student.score_percent}%` : "—"}</td></tr>`
               )
               .join("")}</tbody>
-          </table>`
+          </table>
+          </details>`
             : "";
           return `<article class="owned-test-card test-flow-card">
             <h4>${escapeHtml(test.title)}</h4>
@@ -3624,41 +3799,31 @@ async function renderAdminTestFlowPage(main) {
           </article>`;
         })
         .join("")
-    : `<p class="muted">Тестов пока нет. Когда учитель сохранит тест, он появится здесь.</p>`;
+    : `<p class="muted">Тестов пока нет. Когда супер-администратор сохранит тест, он появится здесь.</p>`;
   main.innerHTML = `
     <section class="panel">
       <h3>Ход тестов</h3>
-      <p class="muted">Учитель создаёт тест и отправляет его классу. Здесь видно, получил ли класс работу, кто её решил и когда тест завершён.</p>
       ${body}
     </section>`;
   updateBreadcrumbs();
 }
 
 async function renderAdminShellSection(main, session) {
-  const section = portalState.shellView || "admin-home";
+  let section = portalState.shellView || "admin-home";
+  if (session?.user?.role !== "super_admin" && ["create-test", "classes", "admin-class", "admin-subject"].includes(section)) {
+    section = "test-flow";
+    portalState.shellView = "test-flow";
+  }
   if (section === "classes") await renderAdminClassesPage(main);
   else if (section === "staff-tests") await renderAdminStaffTestsPage(main);
   else if (section === "class-stats") await renderAdminClassStatsPage(main);
   else if (section === "errors") await renderAdminErrorsPage(main);
-  else if (section === "teacher-home") await renderAdminTeacherOverviewPage(main, session);
   else if (section === "test-flow") await renderAdminTestFlowPage(main);
-  else if (section === "create-test") {
-    if (isTeacherRole()) await renderCreateTestPage(main);
-    else await renderAdminTestFlowPage(main);
-  } else await renderAdminOverviewPage(main, session);
+  else if (section === "create-test") await renderCreateTestPage(main);
+  else await renderAdminOverviewPage(main, session);
 }
 
-function renderAdminClassTools(className, info) {
-  const subjects = info.subjects || [];
-  const options = subjects
-    .map(
-      (subject) =>
-        `<option value="${escapeHtml(subject.code)}"${subject.code === info.teacher?.subject_code ? " selected" : ""}>${escapeHtml(subject.title)}</option>`
-    )
-    .join("");
-  const remove = info.teacher
-    ? `<button type="button" class="btn-ghost admin-row-delete" id="btn-delete-class-teacher" data-teacher-id="${info.teacher.id}">Удалить учителя</button>`
-    : "";
+function renderAdminClassTools(className) {
   return `
     <form id="form-rename-class" class="admin-school-form">
       <h4>Название класса</h4>
@@ -3666,20 +3831,6 @@ function renderAdminClassTools(className, info) {
         <label><span>Новое название</span><input name="class_name" required maxlength="12" value="${escapeHtml(className)}" /></label>
       </div>
       <button type="submit" class="btn-primary" style="max-width:220px">Переименовать</button>
-      <p class="form-msg" hidden role="status"></p>
-    </form>
-    <form id="form-assign-teacher" class="admin-school-form">
-      <h4>Назначить учителя</h4>
-      <div class="field-row">
-        <label><span>ФИО</span><input name="full_name" required value="${escapeHtml(info.teacher?.full_name || "")}" /></label>
-      </div>
-      <div class="field-row admin-cred-fields">
-        <label><span>Логин</span><input name="login" required minlength="3" value="${escapeHtml(info.teacher?.login || "")}" /></label>
-        <label><span>Пароль</span><input name="password" required minlength="4" placeholder="пароль" /></label>
-      </div>
-      <label><span>Предмет</span><select name="subject_code" required>${options}</select></label>
-      <button type="submit" class="btn-primary" style="max-width:240px">Назначить</button>
-      ${remove}
       <p class="form-msg" hidden role="status"></p>
     </form>`;
 }
@@ -3706,40 +3857,13 @@ function bindAdminClassTools(main, className) {
       }
     }
   });
-  $("form-assign-teacher")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const body = Object.fromEntries(new FormData(form).entries());
-    body.class_name = className;
-    const msg = form.querySelector(".form-msg");
-    try {
-      await api("/api/portal/teachers", { method: "POST", body: JSON.stringify(body) });
-      await renderAdminClassSubjects(main);
-    } catch (err) {
-      if (msg) {
-        msg.hidden = false;
-        msg.className = "form-msg err";
-        msg.textContent = adminFormErrorMessage(err.message);
-      }
-    }
-  });
-  $("btn-delete-class-teacher")?.addEventListener("click", async () => {
-    const id = $("btn-delete-class-teacher")?.getAttribute("data-teacher-id");
-    if (!id || !window.confirm("Удалить учителя из школы?")) return;
-    try {
-      await api(`/api/portal/teachers/${id}`, { method: "DELETE" });
-      await renderAdminClassSubjects(main);
-    } catch (err) {
-      window.alert(adminFormErrorMessage(err.message));
-    }
-  });
 }
 
 async function renderAdminClassSubjects(main) {
   const cls = portalState.className;
   if (
     portalState.adminPollSilent &&
-    (studentFormIsBeingEdited(main) || document.activeElement?.closest?.("#form-assign-teacher, #form-rename-class"))
+    (studentFormIsBeingEdited(main) || document.activeElement?.closest?.("#form-rename-class"))
   ) {
     return;
   }
@@ -3847,45 +3971,29 @@ async function renderAdminClassSubjects(main) {
     portalState.studentFormDraft = readStudentFormDraft(main, cls);
   }
 
-  const familiar = isTeacherRole() && !manageRoster;
-  if (familiar) classHub = "";
-  let peoplePanel = "";
-  let ownedTestsPanel = "";
+  let classToolsPanel = "";
   try {
-    const info = await api(`/api/portal/class/${encPath(cls)}/info`);
-    const teacherLine = info.teacher
-      ? `${escapeHtml(info.teacher.full_name)} · ${escapeHtml(info.teacher.subject_title || "предмет не указан")}`
-      : "не назначен";
-    peoplePanel = `<section class="panel">
-      <h3>${familiar ? "Ознакомление" : "Учитель класса"}</h3>
-      ${familiar ? `<p class="muted">Чужой класс: здесь учитель, ученики и ваши тесты. Менять список нельзя.</p>` : ""}
-      <p><strong>Учитель:</strong> ${teacherLine}</p>
-      ${isAdminRole() ? renderAdminClassTools(cls, info) : ""}
-    </section>`;
+    await api(`/api/portal/class/${encPath(cls)}/info`);
+    if (isAdminRole()) {
+      classToolsPanel = `<section class="panel">
+        <h3>Управление классом</h3>
+        ${renderAdminClassTools(cls)}
+      </section>`;
+    }
   } catch (err) {
     console.warn("portal: class info", err);
-  }
-  if (isTeacherRole()) {
-    const cards = await loadOwnedTestCards(cls);
-    ownedTestsPanel = `<section class="panel">
-      <h3>Ваши тесты в этом классе</h3>
-      <p class="muted">Та же информация, что в разделе «Создать тест»: кому отправлен тест и как ученики его прошли.</p>
-      ${renderOwnedTestCardsHtml(cards, "В этот класс вы ещё не отправляли свои тесты.")}
-    </section>`;
   }
 
   main.innerHTML = `
     <button type="button" class="btn-ghost btn-back" id="btn-back-classes">← К классам</button>
-    ${peoplePanel}
+    ${classToolsPanel}
     ${classHub}
     ${rosterPanel}
-    ${ownedTestsPanel}
   `;
   if (isAdminRole()) {
     bindAdminTestsPanel(main, cls);
     bindAdminClassTools(main, cls);
   }
-  if (isTeacherRole()) bindOwnedTestSend(main, () => renderAdminClassSubjects(main));
   if (manageRoster) {
     bindAdminRosterExpand(main);
     bindAdminRosterCopy(main, cls, rosterStudents);
@@ -4236,11 +4344,11 @@ function renderStudentExamBundlePanel(bundle) {
       <span class="muted">≈ ${mins} мин</span>
     </li>`;
       }
-      return `<li class="row-link student-bundle-pick" role="button" tabindex="0" data-exam-id="${t.exam_id}">
+      return `<li><button type="button" class="student-bundle-pick" data-exam-id="${t.exam_id}">
       <span class="bundle-step-mark">→</span>
       <span class="row-link-main">${subject}</span>
       <span class="muted student-bundle-pick-meta">${title ? `${title} · ` : ""}≈ ${mins} мин</span>
-    </li>`;
+    </button></li>`;
     })
     .join("");
   const pendingCount = (bundle.tests || []).filter((t) => !t.submitted).length;
@@ -4279,16 +4387,37 @@ function renderExtraStudentTests(bundle) {
       <span class="muted">Сдан</span>
     </li>`;
       }
-      return `<li class="row-link student-bundle-pick" role="button" tabindex="0" data-exam-id="${t.exam_id}">
+      return `<li><button type="button" class="student-bundle-pick" data-exam-id="${t.exam_id}">
       <span class="bundle-step-mark">→</span>
       <span class="row-link-main">${title || subject}</span>
       <span class="muted student-bundle-pick-meta">${subject} · ≈ ${t.duration_minutes ?? 15} мин</span>
-    </li>`;
+    </button></li>`;
     })
     .join("");
   return `<section class="panel panel-student-bundle">
     <h3>Новые тесты</h3>
     <p class="muted">Учитель отправил эти тесты вашему классу.</p>
+    <ul class="list-plain bundle-steps student-bundle-tests">${rows}</ul>
+  </section>`;
+}
+
+function renderPracticeTests(bundle) {
+  const tests = bundle?.practice_tests || [];
+  if (!tests.length) return "";
+  const rows = tests
+    .map((t) => {
+      const subject = escapeHtml(t.subject_title || "Тест");
+      const title = escapeHtml(t.title || subject);
+      return `<li><button type="button" class="student-bundle-pick" data-exam-id="${t.exam_id}" data-practice="1">
+      <span class="bundle-step-mark">→</span>
+      <span class="row-link-main">${title}</span>
+      <span class="muted student-bundle-pick-meta">${subject} · ≈ ${t.duration_minutes ?? 10} мин</span>
+    </button></li>`;
+    })
+    .join("");
+  return `<section class="panel panel-student-bundle">
+    <h3>Практика</h3>
+    <p class="muted">Можно проходить снова. В конце виден балл, в результаты и учителю он не попадает.</p>
     <ul class="list-plain bundle-steps student-bundle-tests">${rows}</ul>
   </section>`;
 }
@@ -4299,14 +4428,18 @@ function bindStudentExamBundlePanel(main, bundle) {
       if (blockActionIfExamActive()) return;
       const examId = Number(row.getAttribute("data-exam-id"));
       if (!Number.isFinite(examId)) return;
+      const practice = row.getAttribute("data-practice") === "1";
       const meta =
         (bundle?.tests || []).find((x) => x.exam_id === examId) ||
-        (bundle?.extra_tests || []).find((x) => x.exam_id === examId);
+        (bundle?.extra_tests || []).find((x) => x.exam_id === examId) ||
+        (bundle?.practice_tests || []).find((x) => x.exam_id === examId);
       const subject = meta?.subject_title || meta?.title || "тест";
       const mins = meta?.duration_minutes ?? bundle.minutes_per_test ?? "";
       const ok = await showStudentConfirmModal({
         title: `Готовы к тесту: ${subject}?`,
-        description: `На этот тест около ${mins} мин. После сдачи повторно пройти его нельзя. Ответы сохраняются для учителя и администрации.`,
+        description: practice
+          ? `Около ${mins} мин. В конце увидите балл. Он нигде не сохранится, тест можно пройти снова.`
+          : `На этот тест около ${mins} мин. После сдачи повторно пройти его нельзя. Ответы сохраняются для учителя и администрации.`,
         confirmLabel: "Начать тест",
         cancelLabel: "Ещё не готов",
       });
@@ -4316,12 +4449,10 @@ function bindStudentExamBundlePanel(main, bundle) {
       portalState.studentExamReturnHome = true;
       renderStudentFlow();
     };
-    row.addEventListener("click", () => openTest());
-    row.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        openTest();
-      }
+    row.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openTest();
     });
   });
 }
@@ -4826,6 +4957,10 @@ async function renderAdminFlow() {
     setTestTakingActive(false);
   }
   try {
+    if (portalState.session?.user?.role !== "super_admin" && (portalState.adminView === "class" || portalState.adminView === "subject")) {
+      portalState.adminView = "home";
+      portalState.shellView = "test-flow";
+    }
     if (portalState.adminView === "home") {
       await renderAdminShellSection(main, portalState.session);
     } else if (portalState.adminView === "class") {
@@ -4848,7 +4983,6 @@ async function renderAdminFlow() {
 async function renderStudentFlow() {
   const main = portalMain();
   if (!main) return;
-  const session = portalState.session;
   if (
     isStudentTestSessionLocked() &&
     (portalState.adminView !== "exam" ||
@@ -4877,7 +5011,7 @@ async function renderStudentFlow() {
       console.warn("portal: exam bundle", err);
     }
     const syncNote = portalState.githubSyncWarning
-      ? `<p class="muted portal-sync-note" role="status">Результат сохранён на этом устройстве. Если учитель не видит сдачу — обновите страницу или откройте ссылку класса ещё раз.</p>`
+      ? `<p class="muted portal-sync-note" role="status">Результат сохранён на этом устройстве. Если администратор не видит сдачу — обновите страницу или откройте ссылку класса ещё раз.</p>`
       : "";
     if (portalState.githubSyncWarning) portalState.githubSyncWarning = false;
 
@@ -4898,15 +5032,14 @@ async function renderStudentFlow() {
       </div>`;
 
     const overviewStats = `
-      <div class="grid-3 lavh-student-overview-grid">
+      <div class="grid-2 lavh-student-overview-grid">
         <div class="stat-card blue"><span class="muted" style="color:rgba(255,255,255,.85)">Средний балл</span><div class="big">${overallScore ?? "—"}%</div><small>по сданным тестам</small></div>
         <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completedTests.length}</div><small>из ${bundle?.test_count ?? 3} в бандле</small></div>
-        <div class="stat-card purple"><span class="muted" style="color:rgba(255,255,255,.85)">Школа</span><div class="big" style="font-size:1rem">${escapeHtml(session.school_name)}</div><small>LAVH TEST</small></div>
       </div>`;
 
     let body = syncNote;
     if (section === "tests") {
-      body = `${syncNote}${renderStudentExamBundlePanel(bundle)}${renderExtraStudentTests(bundle)}`;
+      body = `${syncNote}${renderStudentExamBundlePanel(bundle)}${renderExtraStudentTests(bundle)}${renderPracticeTests(bundle)}`;
     } else if (section === "results") {
       body = `${syncNote}${renderStudentCompletedTestsBlock(completedTests, highlightId, overallScore)}`;
     } else if (section === "progress") {
@@ -5026,7 +5159,7 @@ async function renderDashboard(session) {
   const keepPage = portalState.keepRestoredPage === true;
   portalState.keepRestoredPage = false;
   if (!portalState.shellView) {
-    portalState.shellView = session.user?.role === "student" ? "home" : "admin-home";
+    portalState.shellView = session.user?.role === "student" ? "home" : session.user?.role === "super_admin" ? "create-test" : "test-flow";
   }
   if (!keepPage) {
     portalState.adminView = "home";
@@ -5041,7 +5174,13 @@ async function renderDashboard(session) {
 
   const role = session.user?.role || "";
 
-  if (role === "admin" || role === "teacher") {
+  if (role === "super_admin") {
+    if (!getActiveSchoolCode()) {
+      portalMain().innerHTML = `<div class="panel"><p class="muted">Выберите школу в разделе «Школы» на уровне платформы.</p></div>`;
+      return;
+    }
+    await adminEnterWorkspace();
+  } else if (role === "admin" || role === "teacher") {
     await adminEnterWorkspace();
   } else if (role === "student") {
     stopAdminSubmissionPoll();
@@ -5103,10 +5242,24 @@ let portalModalHandlersBound = false;
 function bindPortalModalHandlersOnce() {
   if (portalModalHandlersBound) return;
   portalModalHandlersBound = true;
-  $("exam-guard-ok")?.addEventListener("click", () => hideExamGuardModal());
-  $("student-confirm-ok")?.addEventListener("click", () => closeStudentConfirmModal(true));
-  $("student-confirm-cancel")?.addEventListener("click", () => closeStudentConfirmModal(false));
-  $("student-confirm-backdrop")?.addEventListener("click", () => closeStudentConfirmModal(false));
+  document.addEventListener("click", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target) return;
+    if (target.closest("#exam-guard-ok")) {
+      e.preventDefault();
+      hideExamGuardModal();
+      return;
+    }
+    if (target.closest("#student-confirm-ok")) {
+      e.preventDefault();
+      closeStudentConfirmModal(true);
+      return;
+    }
+    if (target.closest("#student-confirm-cancel") || target.closest("#student-confirm-backdrop")) {
+      e.preventDefault();
+      closeStudentConfirmModal(false);
+    }
+  });
 }
 
 export async function lavhInitPortalRuntime() {
@@ -5172,6 +5325,7 @@ export async function lavhRenderPortalDashboard(session, initialShellView) {
 }
 
 export function lavhSyncPortalNavFromLavhView(viewId, adminNav = {}) {
+  if (viewId === "teacher-home") viewId = "admin-home";
   portalState.shellView = viewId;
 
   if (viewId === "admin-class" && adminNav.className) {

@@ -1,5 +1,7 @@
 /** Данные портала с GitHub (data/portal.json) + сдачи в localStorage. */
 
+import { listUsersForSchool } from "./auth-local.js?v=6";
+
 const PROBLEM_THRESHOLD = 40;
 const SUBMISSIONS_KEY = "portal_site_submissions_v1";
 const SUBMISSIONS_RESET_ACK_KEY = "portal_submissions_reset_ack_v1";
@@ -9,7 +11,79 @@ const EXAM_DRAFTS_KEY = "portal_exam_drafts_v2";
 const EXAM_SCHEDULE_KEY = "portal_exam_schedule_v1";
 const DEMO_SESSION_KEY = "portal_demo_session_v1";
 const ACTIVE_SCHOOL_SESSION_KEY = "lavh_active_school_v1";
+const CUSTOM_SCHOOLS_REGISTRY_KEY = "portal_custom_schools_registry_v1";
+const CUSTOM_SCHOOL_BUNDLE_PREFIX = "portal_custom_school_bundle_v1::";
+
+let superAdminConfigPromise = null;
+
+const SUPER_ADMIN_DEFAULTS = {
+  login: "superadmin",
+  password: "lavh-super-2026",
+  full_name: "Супер-администратор LAVH",
+};
 const BUNDLE_SUBJECT_ORDER = ["math", "russian", "english"];
+
+const PRACTICE_TESTS = [
+  {
+    id: 801,
+    subject_title: "Математика",
+    title: "Практика — математика",
+    duration_minutes: 10,
+    questions: [
+      { text: "7 × 8 =", options: ["54", "56", "64", "48"], correct_index: 1 },
+      { text: "15 + 27 =", options: ["32", "42", "40", "52"], correct_index: 1 },
+      { text: "Половина от 18:", options: ["6", "8", "9", "12"], correct_index: 2 },
+    ],
+  },
+  {
+    id: 802,
+    subject_title: "Русский язык",
+    title: "Практика — русский язык",
+    duration_minutes: 10,
+    questions: [
+      { text: "В каком слове пишется «жи»?", options: ["жыраф", "жизнь", "жывот", "жырный"], correct_index: 1 },
+      { text: "Укажите имя существительное.", options: ["бежать", "синий", "школа", "быстро"], correct_index: 2 },
+      { text: "Сколько гласных в слове «урок»?", options: ["1", "2", "3", "4"], correct_index: 1 },
+    ],
+  },
+  {
+    id: 803,
+    subject_title: "Английский язык",
+    title: "Практика — английский",
+    duration_minutes: 10,
+    questions: [
+      { text: "I ___ a student.", options: ["is", "am", "are", "be"], correct_index: 1 },
+      { text: "She ___ to school every day.", options: ["go", "going", "goes", "gone"], correct_index: 2 },
+      { text: "This is ___ book.", options: ["a", "an", "two", "much"], correct_index: 0 },
+    ],
+  },
+  {
+    id: 804,
+    subject_title: "Математика",
+    title: "Практика — дроби",
+    duration_minutes: 10,
+    questions: [
+      { text: "1/2 + 1/2 =", options: ["1", "2", "1/4", "1/2"], correct_index: 0 },
+      { text: "3 × 0 =", options: ["0", "3", "1", "30"], correct_index: 0 },
+      { text: "100 − 1 =", options: ["90", "99", "101", "89"], correct_index: 1 },
+    ],
+  },
+  {
+    id: 805,
+    subject_title: "Русский язык",
+    title: "Практика — орфография",
+    duration_minutes: 10,
+    questions: [
+      { text: "Выберите правильное написание.", options: ["обед", "обеддь", "обьед", "обедд"], correct_index: 0 },
+      { text: "Приставка в слове «подъезд»:", options: ["под", "подъ", "езд", "поезд"], correct_index: 0 },
+      { text: "Антоним к слову «горячий»:", options: ["тёплый", "холодный", "жаркий", "кипящий"], correct_index: 1 },
+    ],
+  },
+];
+
+function practiceTestById(examId) {
+  return PRACTICE_TESTS.find((test) => test.id === Number(examId)) || null;
+}
 
 const bundlePromises = new Map();
 let schoolsIndexPromise = null;
@@ -36,6 +110,123 @@ export function setActiveSchoolCode(code) {
   if (window.portalState) window.portalState.schoolCode = c;
 }
 
+export function clearActiveSchoolCode() {
+  try {
+    sessionStorage.removeItem(ACTIVE_SCHOOL_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (window.portalState) window.portalState.schoolCode = "";
+}
+
+function loadCustomSchoolsRegistry() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SCHOOLS_REGISTRY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomSchoolsRegistry(list) {
+  localStorage.setItem(CUSTOM_SCHOOLS_REGISTRY_KEY, JSON.stringify(list));
+}
+
+function readCustomSchoolBundle(code) {
+  const c = String(code || "").trim().toLowerCase();
+  if (!c) return null;
+  try {
+    const raw = localStorage.getItem(`${CUSTOM_SCHOOL_BUNDLE_PREFIX}${c}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCustomSchoolBundle(code, bundle) {
+  const c = String(code || "").trim().toLowerCase();
+  if (!c) throw new Error("school_required");
+  localStorage.setItem(`${CUSTOM_SCHOOL_BUNDLE_PREFIX}${c}`, JSON.stringify(bundle));
+}
+
+function isCustomSchoolCode(code) {
+  const c = String(code || "").trim().toLowerCase();
+  return loadCustomSchoolsRegistry().some((row) => row.code === c);
+}
+
+async function loadSuperAdminConfig() {
+  if (!superAdminConfigPromise) {
+    superAdminConfigPromise = fetch(`${dataBasePath()}/super-admin.json?v=2`, { cache: "no-cache" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+      .then((cfg) => {
+        if (cfg?.login && cfg?.password) return cfg;
+        return { ...SUPER_ADMIN_DEFAULTS };
+      });
+  }
+  return superAdminConfigPromise;
+}
+
+function normalizeSchoolCodeInput(code) {
+  return String(code || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "");
+}
+
+function emptySchoolBundle({ schoolName, admin }) {
+  return {
+    school_name: schoolName,
+    classes: [],
+    class_schedules: {},
+    rosters: {},
+    submissions_reset_generation: 1,
+    submissions_retention_hours: 24,
+    submissions_upload: { enabled: false, github_token: "" },
+    cleared_student_ids: [],
+    subjects: [
+      { code: "math", title: "Математика", test_count: 0 },
+      { code: "russian", title: "Русский язык", test_count: 0 },
+    ],
+    exams: [],
+    demo_users: [
+      {
+        id: 1,
+        login: admin.login,
+        password: admin.password,
+        full_name: admin.full_name,
+        role: "admin",
+        class_name: null,
+      },
+    ],
+  };
+}
+
+export async function authenticateSuperAdmin(login, password) {
+  const cfg = await loadSuperAdminConfig();
+  const loginNorm = String(login || "").trim().toLowerCase();
+  const pwd = String(password || "").trim();
+  const cfgLogin = String(cfg?.login || SUPER_ADMIN_DEFAULTS.login).trim().toLowerCase();
+  const cfgPwd = String(cfg?.password || SUPER_ADMIN_DEFAULTS.password);
+  if (loginNorm !== cfgLogin || pwd !== cfgPwd) return null;
+  return {
+    user: {
+      id: 0,
+      login: cfg.login,
+      full_name: cfg.full_name || "Супер-администратор",
+      role: "super_admin",
+      class_name: null,
+      subject_code: null,
+      subject_title: null,
+      staff_title: null,
+    },
+    school_name: null,
+    school_code: null,
+  };
+}
+
 function scopedStorageKey(base) {
   const sc = getActiveSchoolCode();
   return sc ? `${base}::${sc}` : base;
@@ -45,7 +236,14 @@ export async function loadSchoolsIndex() {
   if (!schoolsIndexPromise) {
     schoolsIndexPromise = fetch(`${dataBasePath()}/schools/index.json?v=1`, { cache: "no-cache" })
       .then((res) => (res.ok ? res.json() : { schools: [] }))
-      .catch(() => ({ schools: [] }));
+      .catch(() => ({ schools: [] }))
+      .then((idx) => {
+        const merged = [...(idx.schools || [])];
+        for (const row of loadCustomSchoolsRegistry()) {
+          if (!merged.some((s) => s.code === row.code)) merged.push(row);
+        }
+        return { schools: merged };
+      });
   }
   return schoolsIndexPromise;
 }
@@ -78,6 +276,7 @@ export async function resolveDemoUserSchool(login, password) {
 export async function schoolExists(code) {
   const c = String(code || "").trim().toLowerCase();
   if (!c) return false;
+  if (isCustomSchoolCode(c) || readCustomSchoolBundle(c)) return true;
   const idx = await loadSchoolsIndex();
   if (idx.schools?.some((s) => s.code === c)) return true;
   try {
@@ -143,18 +342,21 @@ export async function loadPortalBundle(options = {}) {
   if (!schoolCode) throw new Error("school_required");
   if (options.fresh) invalidatePortalBundleCache(schoolCode);
   if (!bundlePromises.has(schoolCode)) {
-    const url = `${dataBasePath()}/schools/${encodeURIComponent(schoolCode)}/portal.json?v=107`;
-    const promise = fetch(url, { cache: "no-cache" })
-      .then((res) => {
-        if (!res.ok) throw new Error("portal_data_load_failed");
-        return res.json();
-      })
-      .then((bundle) => {
-        enforceSubmissionsReset(bundle);
-        enforceClearedStudents(bundle);
-        return bundle;
-      });
-    bundlePromises.set(schoolCode, promise);
+    const custom = readCustomSchoolBundle(schoolCode);
+    const promise = custom
+      ? Promise.resolve(custom)
+      : fetch(`${dataBasePath()}/schools/${encodeURIComponent(schoolCode)}/portal.json?v=109`, {
+          cache: "no-cache",
+        }).then((res) => {
+          if (!res.ok) throw new Error("portal_data_load_failed");
+          return res.json();
+        });
+    const wrapped = promise.then((bundle) => {
+      enforceSubmissionsReset(bundle);
+      enforceClearedStudents(bundle);
+      return bundle;
+    });
+    bundlePromises.set(schoolCode, wrapped);
   }
   return bundlePromises.get(schoolCode);
 }
@@ -365,6 +567,34 @@ function mergeSchoolEdits(bundle, schoolCode) {
   }
   for (const subject of base.subjects) {
     subject.test_count = base.exams.filter((exam) => exam.subject_code === subject.code).length;
+  }
+
+  const publicPeople = listUsersForSchool(schoolCode);
+  if (!base.rosters) base.rosters = {};
+  if (!base.demo_users) base.demo_users = [];
+  for (const person of publicPeople) {
+    const login = String(person.login || "").toLowerCase();
+    if (!base.demo_users.some((row) => String(row.login || "").toLowerCase() === login)) {
+      base.demo_users.push({
+        id: person.id,
+        login: person.login,
+        password: person.password,
+        full_name: person.full_name,
+        role: person.role === "teacher" || person.role === "admin" ? person.role : "student",
+        class_name: person.class_name || null,
+      });
+    }
+    if ((person.role || "student") !== "student" || !person.class_name) continue;
+    if (!base.classes.some((row) => row.class_name === person.class_name)) continue;
+    if (!base.rosters[person.class_name]) base.rosters[person.class_name] = [];
+    const roster = base.rosters[person.class_name];
+    if (roster.some((row) => Number(row.id) === Number(person.id))) continue;
+    roster.push({
+      id: person.id,
+      full_name: person.full_name,
+      status: "not_started",
+      score_percent: null,
+    });
   }
 
   for (const c of base.classes) {
@@ -1176,11 +1406,12 @@ function parseBody(options) {
 }
 
 function publicUser(row) {
+  const role = row.role === "teacher" ? "admin" : row.role;
   return {
     id: row.id,
     login: row.login,
     full_name: row.full_name,
-    role: row.role,
+    role,
     class_name: row.class_name ?? null,
     subject_code: row.subject_code ?? null,
     subject_title: row.subject_title ?? null,
@@ -1191,6 +1422,11 @@ function publicUser(row) {
 /** Сохранить сессию (школьный или публичный вход) для восстановления после F5. */
 export function persistDemoSession(session) {
   if (!session?.user) return;
+  if (session.user.role === "super_admin" && !session.school_code) {
+    clearActiveSchoolCode();
+    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+    return;
+  }
   const schoolCode = session.school_code || getActiveSchoolCode();
   if (schoolCode) session.school_code = schoolCode;
   localStorage.setItem(scopedStorageKey(DEMO_SESSION_KEY), JSON.stringify(session));
@@ -1199,12 +1435,17 @@ export function persistDemoSession(session) {
 /** Демо-вход из portal.json. Пароли открыты — только для показа. */
 export async function demoAuthApi(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const bundle = await getMergedBundle();
 
   if (path === "/api/login" && method === "POST") {
     const body = parseBody(options);
     const login = String(body.login || "").trim();
     const password = String(body.password || "");
+    const superSession = await authenticateSuperAdmin(login, password);
+    if (superSession) {
+      localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(superSession));
+      return superSession;
+    }
+    const bundle = await getMergedBundle();
     const users = bundle.demo_users || [];
     const found = users.find(
       (u) => u.login.toLowerCase() === login.toLowerCase() && u.password === password
@@ -1221,9 +1462,32 @@ export async function demoAuthApi(path, options = {}) {
   }
 
   if (path === "/api/me" && method === "GET") {
-    const raw = localStorage.getItem(scopedStorageKey(DEMO_SESSION_KEY));
-    if (!raw) throw new Error("not_authenticated");
-    const session = JSON.parse(raw);
+    let raw = localStorage.getItem(DEMO_SESSION_KEY);
+    let session = raw ? JSON.parse(raw) : null;
+    if (session?.user?.role !== "super_admin") {
+      raw = localStorage.getItem(scopedStorageKey(DEMO_SESSION_KEY));
+      if (!raw) raw = localStorage.getItem(DEMO_SESSION_KEY);
+      if (!raw) throw new Error("not_authenticated");
+      session = JSON.parse(raw);
+    }
+    if (session.user?.role === "super_admin") {
+      const active = getActiveSchoolCode();
+      if (session.school_code && active && session.school_code !== active) {
+        throw new Error("not_authenticated");
+      }
+      if (active && session.school_code !== active) {
+        session.school_code = active;
+        try {
+          const bundle = await getMergedBundle({ schoolCode: active });
+          session.school_name = bundle.school_name;
+        } catch {
+          /* ignore */
+        }
+      }
+      localStorage.setItem(scopedStorageKey(DEMO_SESSION_KEY) || DEMO_SESSION_KEY, JSON.stringify(session));
+      return session;
+    }
+    const bundle = await getMergedBundle();
     const active = getActiveSchoolCode();
     if (session.school_code && active && session.school_code !== active) {
       throw new Error("not_authenticated");
@@ -1237,6 +1501,7 @@ export async function demoAuthApi(path, options = {}) {
 
   if (path === "/api/logout" && method === "POST") {
     localStorage.removeItem(scopedStorageKey(DEMO_SESSION_KEY));
+    localStorage.removeItem(DEMO_SESSION_KEY);
     return { status: "ok" };
   }
 
@@ -1249,28 +1514,110 @@ function currentUser() {
 }
 
 function isPortalStaff(user) {
-  return Boolean(user && (user.role === "admin" || user.role === "teacher"));
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "teacher") return true;
+  if (user.role === "super_admin" && getActiveSchoolCode()) return true;
+  return false;
+}
+
+function canManageSchoolApi(user) {
+  return user?.role === "admin" || user?.role === "super_admin";
 }
 
 function canManageClassRoster(user, className) {
   if (!user || !className) return false;
-  if (user.role === "admin") return true;
+  if (user.role === "admin" || user.role === "super_admin") return true;
   return user.role === "teacher" && user.class_name === className;
 }
 
 function canViewExamAsStaff(user, ex) {
   if (!user || !ex) return false;
-  if (user.role === "admin") return true;
+  if (user.role === "admin" || user.role === "super_admin") return true;
   if (user.role !== "teacher") return false;
   if (ex.created_by != null && Number(ex.created_by) === Number(user.id)) return true;
   return Boolean(user.class_name) && ex.class_name === user.class_name;
 }
 
+async function handleSuperAdminApi(path, method, options, user) {
+  if (user?.role !== "super_admin") throw new Error("forbidden");
+
+  if (path === "/api/super/schools" && method === "GET") {
+    const idx = await loadSchoolsIndex();
+    const customCodes = new Set(loadCustomSchoolsRegistry().map((r) => r.code));
+    return {
+      schools: (idx.schools || []).map((row) => ({
+        ...row,
+        source: customCodes.has(row.code) ? "browser" : "site",
+      })),
+    };
+  }
+
+  if (path === "/api/super/schools" && method === "POST") {
+    const body = parseBody(options);
+    const code = normalizeSchoolCodeInput(body.code);
+    const name = String(body.name || "").trim();
+    const description = String(body.description || "").trim();
+    const adminName = String(body.admin_full_name || body.admin_name || "Администратор школы").trim();
+    const adminLogin = String(body.admin_login || "admin").trim().toLowerCase();
+    const adminPassword = String(body.admin_password || "admin123");
+    if (!code || code.length < 2) throw new Error("school_code_invalid");
+    if (!name) throw new Error("school_name_required");
+    if (adminLogin.length < 3) throw new Error("admin_login_short");
+    if (adminPassword.length < 4) throw new Error("admin_password_short");
+    if (await schoolExists(code)) throw new Error("school_exists");
+    const registry = loadCustomSchoolsRegistry();
+    registry.push({
+      code,
+      name,
+      description: description || `Школа ${name}`,
+      created_at: new Date().toISOString(),
+    });
+    saveCustomSchoolsRegistry(registry);
+    writeCustomSchoolBundle(
+      code,
+      emptySchoolBundle({
+        schoolName: name,
+        admin: { login: adminLogin, password: adminPassword, full_name: adminName },
+      })
+    );
+    schoolsIndexPromise = null;
+    invalidatePortalBundleCache(code);
+    return { ok: true, code, name };
+  }
+
+  const patchMatch = path.match(/^\/api\/super\/schools\/([^/]+)$/);
+  if (patchMatch && method === "PATCH") {
+    const code = decodeURIComponent(patchMatch[1]).toLowerCase();
+    const body = parseBody(options);
+    const registry = loadCustomSchoolsRegistry();
+    const row = registry.find((s) => s.code === code);
+    if (!row) throw new Error("school_not_custom");
+    if (body.name != null) row.name = String(body.name).trim() || row.name;
+    if (body.description != null) row.description = String(body.description).trim();
+    saveCustomSchoolsRegistry(registry);
+    const bundle = readCustomSchoolBundle(code);
+    if (bundle && body.name) {
+      bundle.school_name = row.name;
+      writeCustomSchoolBundle(code, bundle);
+    }
+    schoolsIndexPromise = null;
+    invalidatePortalBundleCache(code);
+    return { ok: true, school: row };
+  }
+
+  throw new Error("not_found");
+}
+
 export async function dataApi(path, options = {}) {
-  const bundle = await getMergedBundle();
-  enforceClearedStudents(bundle);
   const method = String(options.method || "GET").toUpperCase();
   const user = currentUser();
+
+  if (path.startsWith("/api/super/")) {
+    return handleSuperAdminApi(path, method, options, user);
+  }
+
+  const bundle = await getMergedBundle();
+  enforceClearedStudents(bundle);
   const submissions = await loadSubmissionsForApi(user);
   const teacherReports = loadTeacherReports();
 
@@ -1284,7 +1631,7 @@ export async function dataApi(path, options = {}) {
   }
 
   if (path === "/api/portal/classes" && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const body = parseBody(options);
     const class_name = String(body.class_name || "").trim();
     if (!class_name) throw new Error("class_name_required");
@@ -1299,7 +1646,7 @@ export async function dataApi(path, options = {}) {
 
   const classDeleteMatch = path.match(/^\/api\/portal\/class\/([^/]+)$/);
   if (classDeleteMatch && method === "DELETE") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const cls = decodeURIComponent(classDeleteMatch[1]);
     if (!bundle.classes.some((c) => c.class_name === cls)) throw new Error("class_not_found");
     const edits = loadSchoolEdits();
@@ -1428,7 +1775,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/class\/([^/]+)\/rename$/);
   if (m && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const from = decodeURIComponent(m[1]);
     const body = parseBody(options);
     const to = String(body.class_name || "").trim();
@@ -1444,7 +1791,7 @@ export async function dataApi(path, options = {}) {
   }
 
   if (path === "/api/portal/teachers" && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const body = parseBody(options);
     const full_name = String(body.full_name || "").trim();
     const login = String(body.login || "").trim().toLowerCase();
@@ -1496,7 +1843,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/teachers\/(\d+)$/);
   if (m && method === "DELETE") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const id = Number(m[1]);
     const teacher = (bundle.demo_users || []).find((item) => item.role === "teacher" && Number(item.id) === id);
     if (!teacher) throw new Error("teacher_not_found");
@@ -1720,7 +2067,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/class\/([^/]+)\/exam-timing$/);
   if (m) {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const cls = decodeURIComponent(m[1]);
     if (method === "GET") {
       return { class_name: cls, schedule: classBundleTiming(bundle, cls) };
@@ -1756,7 +2103,7 @@ export async function dataApi(path, options = {}) {
       };
     }
     if (method === "POST") {
-      if (!user || user.role !== "admin") throw new Error("forbidden");
+      if (!canManageSchoolApi(user)) throw new Error("forbidden");
       const body = parseBody(options);
       if (body.action === "publish") {
         const schedule = publishClassExamBundle(bundle, cls);
@@ -1808,12 +2155,18 @@ export async function dataApi(path, options = {}) {
       next_exam_id,
       all_submitted,
       extra_tests,
+      practice_tests: PRACTICE_TESTS.map((test) => ({
+        exam_id: test.id,
+        title: test.title,
+        subject_title: test.subject_title,
+        duration_minutes: test.duration_minutes,
+      })),
     };
   }
 
   m = path.match(/^\/api\/portal\/exams\/(\d+)\/draft$/);
   if (m && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const examId = Number(m[1]);
     const base = examById(bundle, examId);
     if (!base) throw new Error("exam_not_found");
@@ -1837,7 +2190,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/exams\/(\d+)\/publish$/);
   if (m && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const examId = Number(m[1]);
     const base = examById(bundle, examId);
     if (!base) throw new Error("exam_not_found");
@@ -1869,6 +2222,26 @@ export async function dataApi(path, options = {}) {
   if (m && method === "GET") {
     if (!user) throw new Error("not_authenticated");
     const examId = Number(m[1]);
+    const practice = practiceTestById(examId);
+    if (practice) {
+      if (user.role !== "student") throw new Error("forbidden");
+      return {
+        exam: {
+          id: practice.id,
+          title: practice.title,
+          subject_title: practice.subject_title,
+          duration_minutes: practice.duration_minutes,
+          question_count: practice.questions.length,
+          catalog_key: "todo",
+          practice: true,
+        },
+        questions: practice.questions,
+        show_answers: false,
+        submitted: false,
+        results_released: false,
+        awaiting_release: false,
+      };
+    }
     const ex = examRecord(bundle, examId, user.role);
     if (!ex) throw new Error("exam_not_found");
     if (user.role === "admin" || user.role === "teacher") {
@@ -1988,7 +2361,7 @@ export async function dataApi(path, options = {}) {
   }
 
   if (path === "/api/portal/admin/reset-student-progress" && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const body = parseBody(options);
     const login = String(body.login || "").trim().toLowerCase();
     const users = bundle.demo_users || [];
@@ -2009,7 +2382,7 @@ export async function dataApi(path, options = {}) {
 
   m = path.match(/^\/api\/portal\/exams\/(\d+)\/send-teacher-report$/);
   if (m && method === "POST") {
-    if (!user || user.role !== "admin") throw new Error("forbidden");
+    if (!canManageSchoolApi(user)) throw new Error("forbidden");
     const examId = Number(m[1]);
     const admin = await dataApi(`/api/portal/exams/${examId}/admin`, { method: "GET" });
     if (!admin.teacher_analytics_released) throw new Error("not_all_submitted");

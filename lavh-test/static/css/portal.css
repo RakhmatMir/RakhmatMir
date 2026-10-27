@@ -282,12 +282,49 @@ body:not(.lavh-app) {
   font: inherit;
 }
 
+.student-bundle-tests > li:has(> .student-bundle-pick) {
+  display: block;
+  padding: 0;
+}
+
 .student-bundle-tests .student-bundle-test,
 .student-bundle-tests .student-bundle-pick {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+button.student-bundle-pick {
+  width: 100%;
+  margin: 0;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.student-bundle-pick::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+button.student-bundle-pick:hover {
+  background: var(--row-hover, var(--ghost-hover));
+}
+
+#student-confirm-modal {
+  z-index: 960;
+}
+
+body.exam-guard-open #student-confirm-modal {
+  pointer-events: auto;
 }
 
 .student-bundle-tests .student-bundle-test.is-done {
@@ -341,10 +378,17 @@ body.exam-guard-open #exam-guard-modal .exam-guard-dialog {
 }
 
 .student-test-run {
+  --exam-surface: #ffffff;
+  --exam-surface-soft: #eef4fc;
+  --exam-accent: #4a69e2;
+  --exam-border: #d4e0f0;
   min-height: min(70vh, 640px);
   display: flex;
   align-items: stretch;
   justify-content: center;
+  padding: 16px 12px 24px;
+  background: var(--exam-surface-soft);
+  border-radius: var(--radius);
 }
 
 .student-test-shell {
@@ -371,7 +415,14 @@ body.exam-guard-open #exam-guard-modal .exam-guard-dialog {
 }
 
 .student-test-timer.is-urgent {
-  color: #f87171;
+  color: var(--exam-accent, #4a69e2);
+}
+
+.student-test-run .student-test-card {
+  background: var(--exam-surface, #ffffff);
+  border: 1px solid var(--exam-border, #d4e0f0);
+  border-radius: var(--radius);
+  padding: 22px 20px 24px;
 }
 
 .student-test-card {
@@ -414,6 +465,22 @@ body.exam-guard-open #exam-guard-modal .exam-guard-dialog {
 .student-test-opt:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: var(--ghost-hover);
+}
+
+.student-test-run .student-test-opt {
+  background: var(--exam-surface, #ffffff);
+  border-color: var(--exam-border, #d4e0f0);
+}
+
+.student-test-run .student-test-opt:hover {
+  border-color: #a8c4f0;
+  background: var(--exam-surface-soft, #eef4fc);
+}
+
+.student-test-run .student-test-opt.is-selected {
+  border-color: var(--exam-accent, #4a69e2);
+  background: var(--exam-surface-soft, #eef4fc);
+  box-shadow: none;
 }
 
 .student-test-opt.is-selected {
@@ -1499,6 +1566,15 @@ body.teacher-submission-modal-open {
   gap: 10px;
 }
 
+.panel-admin-overview .admin-overview-lead {
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.panel-admin-overview .btn-primary {
+  max-width: 280px;
+}
+
 .panel-admin-timing .admin-timing-total,
 .panel-admin-timing .admin-timing-row {
   display: flex;
@@ -1968,8 +2044,13 @@ body.teacher-submission-modal-open {
   gap: 12px;
 }
 
-.list-plain li:last-child {
+.list-plain li:last-child:not(.row-link) {
   border-bottom: none;
+}
+
+.list-plain li.row-link > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .list-plain li.row-link {
@@ -2231,8 +2312,68 @@ body.teacher-submission-modal-open {
   margin-bottom: 10px;
 }
 
-.student-result-card .btn-result-detail {
-  margin-top: 4px;
+.student-result-card .student-result-test.btn-result-detail {
+  margin-top: 0;
+}
+
+.student-result-card .student-result-trigger-text {
+  flex: 1;
+}
+
+.student-result-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.student-result-card.panel-collapse .collapse-body {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.student-result-card.panel-collapse.is-open .collapse-body {
+  padding-bottom: 10px;
+  border-top-color: transparent;
+}
+
+.student-result-tests {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.student-result-test {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-result-test > span:first-child {
+  min-width: 0;
+}
+
+.student-result-test > span:last-child {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.student-result-test:hover {
+  border-color: var(--lavh-blue, var(--accent));
+  background: var(--lavh-blue-bg, #eef2ff);
 }
 
 .cell-errors-stack {
@@ -2418,4 +2559,90 @@ body.teacher-submission-modal-open {
 
 .data-table td.col-errors-stack {
   vertical-align: middle;
+}
+
+/* Экран сдачи: один серый тон, без цветных акцентов. Шапка и меню возвращаются после теста. */
+body.is-test-active {
+  background: #f5f5f5;
+}
+
+body.is-test-active .shell {
+  grid-template-columns: 1fr;
+}
+
+body.is-test-active .sidebar,
+body.is-test-active .nav-overlay,
+body.is-test-active .main-topbar,
+body.is-test-active .super-school-bar {
+  display: none;
+}
+
+body.is-test-active .main {
+  padding-top: 16px;
+}
+
+.student-test-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+body.is-test-active .shell {
+  filter: grayscale(1);
+}
+
+.student-test-run {
+  --exam-surface: #ffffff;
+  --exam-surface-soft: #f4f4f5;
+  --exam-accent: #3f3f46;
+  --exam-border: #d4d4d8;
+  background: #f4f4f5;
+}
+
+.student-test-timer.is-urgent {
+  color: inherit;
+}
+
+.test-flow-students {
+  margin-top: 12px;
+}
+
+.test-flow-students summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px 0;
+}
+
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.home-stat {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.home-stat.is-miss {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.home-stat strong {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.home-stat span {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
