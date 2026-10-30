@@ -922,7 +922,7 @@ function buildStudentSubmissionPreview(bundle, examId, studentId, submissions) {
   }
   let exitIntentLabel = null;
   if (exitIntentCount > 0) {
-    exitIntentLabel = student.exit_intent_label || `${exitIntentCount} раз`;
+    exitIntentLabel = student.exit_intent_label || ruTimes(exitIntentCount);
   }
   const exView = examRecord(bundle, examId, "admin") || ex;
   return {
@@ -1241,7 +1241,7 @@ function rosterForClass(bundle, className, examId, submissions, { releaseResults
         out.duration_label = sub.duration_label || out.duration_label;
         out.exit_intent_count = sub.exit_intent_count || 0;
         if (out.exit_intent_count > 0) {
-          out.exit_intent_label = `${out.exit_intent_count} раз`;
+          out.exit_intent_label = ruTimes(out.exit_intent_count);
         }
       } else {
         out.score_percent = null;
@@ -1276,6 +1276,28 @@ function answersForStudent(bundle, examId, student, questions, submissions) {
     picks[idx] = (picks[idx] + 1) % 4;
   }
   return picks;
+}
+
+/** «1 раз», «2 раза», «5 раз». */
+export function ruTimes(n) {
+  const k = Math.abs(Number(n)) % 100;
+  const d = k % 10;
+  const word = d >= 2 && d <= 4 && (k < 12 || k > 14) ? "раза" : "раз";
+  return `${n} ${word}`;
+}
+
+/** «1 тест», «2 теста», «5 тестов». */
+export function ruTests(n) {
+  const k = Math.abs(Number(n)) % 100;
+  const d = k % 10;
+  const word = k >= 11 && k <= 14 ? "тестов" : d === 1 ? "тест" : d >= 2 && d <= 4 ? "теста" : "тестов";
+  return `${n} ${word}`;
+}
+
+/** После «из»: «из 1 теста», «из 3 тестов». */
+export function ruOfTests(n) {
+  const k = Math.abs(Number(n)) % 100;
+  return `${n} ${k % 10 === 1 && k !== 11 ? "теста" : "тестов"}`;
 }
 
 function formatSecondsLabel(totalSec) {
@@ -1377,7 +1399,7 @@ function buildAnalytics(bundle, examId, questions, students, submissions) {
       } else {
         const awayPart =
           questionAwayTotal > 0 ? ` · ${formatSecondsLabel(questionAwayTotal)} вне вкладки` : "";
-        questionExitLabel = `окно: ${questionExitTotal} раз${awayPart}`;
+        questionExitLabel = `окно: ${ruTimes(questionExitTotal)}${awayPart}`;
       }
     }
     return {

@@ -21,7 +21,7 @@ import {
   persistDemoSession,
   resolveDemoUserSchool,
   setActiveSchoolCode,
-} from "./portal-data.js?v=60";
+} from "./portal-data.js?v=61";
 import {
   lavhInitPortalRuntime,
   lavhRenderPortalDashboard,
@@ -29,7 +29,7 @@ import {
   renderAdminFlow,
   renderStudentFlow,
   portalState,
-} from "./portal-app.js?v=85";
+} from "./portal-app.js?v=86";
 
 const $app = document.getElementById("app");
 let portalRuntimeReady = false;
@@ -1162,7 +1162,7 @@ async function renderStudentHome() {
   return `
     <div class="grid-3">
       <div class="stat-card blue"><span class="muted" style="color:rgba(255,255,255,.85)">Средний балл</span><div class="big">${completed.overall_score_percent ?? "—"}%</div><small>по сданным тестам</small></div>
-      <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completed.tests.length}</div><small>из 3 в бандле</small></div>
+      <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completed.tests.length}</div><small>из 3 тестов</small></div>
       <div class="stat-card purple"><span class="muted" style="color:rgba(255,255,255,.85)">Школа</span><div class="big" style="font-size:1rem">${school}</div><small>LAVH TEST</small></div>
     </div>
     <p style="margin-top:20px;color:var(--lavh-muted)">Фрагмент главного экрана ученика — полные карточки в разделах «Мои тесты» и «Результаты».</p>
@@ -1368,8 +1368,8 @@ function renderProgress() {
       <p class="muted">Индивидуальная шкала по предмету (демо Q1–Q4)</p>
       <div class="chart-line">
         <svg viewBox="0 0 400 120" preserveAspectRatio="none">
-          <polyline fill="none" stroke="#9333ea" stroke-width="3" points="20,100 100,85 180,70 260,45 340,25"/>
-          ${[20, 100, 180, 260, 340].map((x, i) => `<circle cx="${x}" cy="${[100, 85, 70, 45, 25][i]}" r="5" fill="#9333ea"/>`).join("")}
+          <polyline fill="none" stroke="#9333ea" stroke-width="3" points="40,100 146,80 253,55 360,25"/>
+          ${[40, 146, 253, 360].map((x, i) => `<circle cx="${x}" cy="${[100, 80, 55, 25][i]}" r="5" fill="#9333ea"/>`).join("")}
         </svg>
       </div>
     </div>

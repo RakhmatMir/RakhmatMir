@@ -4,7 +4,10 @@ import {
   getActiveSchoolCode,
   invalidateRemoteSubmissionsCache,
   loadPortalBundle,
-} from "./portal-data.js?v=60";
+  ruOfTests,
+  ruTests,
+  ruTimes,
+} from "./portal-data.js?v=61";
 import {
   autoSyncSubmissionsOnLoad,
   copyLocalSubmissionsToClipboard,
@@ -686,7 +689,7 @@ function renderStudentFeedbackTable(
       render: (row) => {
         if (!row.exit_count && !row.away_label) return `<span class="tag tag-ok">нет</span>`;
         const parts = [];
-        if (row.exit_count) parts.push(`${row.exit_count} раз`);
+        if (row.exit_count) parts.push(ruTimes(row.exit_count));
         if (row.away_label) parts.push(row.away_label);
         return `<span class="tag tag-warn">${escapeHtml(parts.join(" · "))}</span>`;
       },
@@ -1020,7 +1023,7 @@ function renderProblemQuestionExitCell(meta) {
   const n = Number(meta.question_exit_total) || 0;
   if (n <= 0) return `<span class="tag tag-ok">нет</span>`;
   const away = Number(meta.question_away_total_seconds) || 0;
-  const countLabel = n === 1 ? "1 раз" : `${n} раз`;
+  const countLabel = ruTimes(n);
   const awayHtml =
     away > 0
       ? `<span class="cell-away-sub muted">${escapeHtml(formatDurationLabel(away))}</span>`
@@ -4369,7 +4372,7 @@ function renderStudentExamBundlePanel(bundle) {
   if (bundle.all_submitted) {
     return `<section class="panel panel-student-bundle">
       <h3>Все тесты сданы</h3>
-      <p class="muted">Вы сдали все ${bundle.test_count} теста. Повторно сдать нельзя. Ваши баллы — в блоке «Пройденные тесты» ниже.</p>
+      <p class="muted">Вы сдали все ${ruTests(bundle.test_count)}. Повторно сдать нельзя. Ваши баллы — в разделе «Результаты».</p>
       <ul class="list-plain bundle-steps student-bundle-tests">${testRows}</ul>
     </section>`;
   }
@@ -5028,12 +5031,11 @@ async function renderStudentFlow() {
         <p class="muted">Индивидуальная шкала по предмету (демо Q1–Q4)</p>
         <div class="chart-line">
           <svg viewBox="0 0 400 120" preserveAspectRatio="none">
-            <polyline fill="none" stroke="#9333ea" stroke-width="3" points="20,100 100,85 180,70 260,45 340,25"/>
-            <circle cx="20" cy="100" r="5" fill="#9333ea"/>
-            <circle cx="100" cy="85" r="5" fill="#9333ea"/>
-            <circle cx="180" cy="70" r="5" fill="#9333ea"/>
-            <circle cx="260" cy="45" r="5" fill="#9333ea"/>
-            <circle cx="340" cy="25" r="5" fill="#9333ea"/>
+            <polyline fill="none" stroke="#9333ea" stroke-width="3" points="40,100 146,80 253,55 360,25"/>
+            <circle cx="40" cy="100" r="5" fill="#9333ea"/>
+            <circle cx="146" cy="80" r="5" fill="#9333ea"/>
+            <circle cx="253" cy="55" r="5" fill="#9333ea"/>
+            <circle cx="360" cy="25" r="5" fill="#9333ea"/>
           </svg>
         </div>
       </div>`;
@@ -5041,7 +5043,7 @@ async function renderStudentFlow() {
     const overviewStats = `
       <div class="grid-2 lavh-student-overview-grid">
         <div class="stat-card blue"><span class="muted" style="color:rgba(255,255,255,.85)">Средний балл</span><div class="big">${overallScore ?? "—"}%</div><small>по сданным тестам</small></div>
-        <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completedTests.length}</div><small>из ${bundle?.test_count ?? 3} в бандле</small></div>
+        <div class="stat-card yellow"><span class="muted" style="color:rgba(255,255,255,.85)">Сдано</span><div class="big">${completedTests.length}</div><small>из ${ruOfTests(bundle?.test_count ?? 3)}</small></div>
       </div>`;
 
     let body = syncNote;
